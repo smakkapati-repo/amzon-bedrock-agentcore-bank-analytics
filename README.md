@@ -56,20 +56,79 @@ React Frontend (Port 3000) ↔ Flask Backend (Port 8001) ↔ AWS Bedrock
 - **LDR** - Loan-to-Deposit Ratio: Loans as % of deposits
 - **CRE Concentration** - Commercial real estate loans as % of total capital
 
-## 🚀 One-Click Deployment
+## 🚀 Deployment Guide
+
+### Prerequisites
+
+**Required:**
+- AWS Account with administrative access
+- AWS Bedrock access enabled (see setup below)
+- Your current public IP address
+
+**Enable Bedrock Access:**
+1. Go to [AWS Bedrock Console](https://console.aws.amazon.com/bedrock/)
+2. Navigate to **Model Access** in the left sidebar
+3. Click **Request model access**
+4. Enable these models:
+   - **Anthropic Claude 3 Haiku**
+   - **Anthropic Claude 3.5 Sonnet**
+   - **Amazon Titan Embeddings V2**
+5. Wait for approval (usually instant)
+
+### One-Click Deployment
 
 [![Launch Stack](https://s3.amazonaws.com/cloudformation-examples/cloudformation-launch-stack.png)](https://console.aws.amazon.com/cloudformation/home#/stacks/create/review?templateURL=https://raw.githubusercontent.com/AWS-Samples-GenAI-FSI/peer-bank-analytics/main/fargate-template.yaml)
 
-**Prerequisites:**
-- AWS Account with Bedrock access enabled
-- Your current IP address (for security)
+**Step-by-Step:**
 
-**What you get:**
-- **Zero Configuration**: Fully automated deployment
-- **Serverless**: AWS Fargate handles scaling
-- **Secure**: Access restricted to your IP only
-- **Ready in 10 minutes**: Complete React + Flask setup
-- **Production Ready**: Load balancer and auto-scaling included
+1. **Click the Launch Stack button above**
+   - Opens AWS CloudFormation console
+   - Template URL is pre-populated
+
+2. **Configure Stack Parameters:**
+   - **Stack name**: `bankiq-platform` (or your choice)
+   - **YourIPAddress**: Enter your public IP (find at [whatismyip.com](https://whatismyip.com))
+   - **VpcId**: Select your default VPC or existing VPC
+   - **SubnetIds**: Select 2+ public subnets in different AZs
+   - **ContainerImage**: `public.ecr.aws/x0b5g9m7/bankiq-platform:latest`
+
+3. **Review and Deploy:**
+   - Check "I acknowledge that AWS CloudFormation might create IAM resources"
+   - Click **Create Stack**
+   - Wait 10-15 minutes for deployment
+
+4. **Access Your Application:**
+   - Go to **Outputs** tab in CloudFormation
+   - Click the **ApplicationURL** link
+   - BankIQ+ should load successfully
+
+### What Gets Deployed
+
+- **ECS Fargate Service**: Serverless container hosting
+- **Application Load Balancer**: High availability and SSL termination
+- **Security Groups**: IP-restricted access (your IP only)
+- **IAM Roles**: Minimal permissions for Bedrock access
+- **CloudWatch Logs**: Application monitoring and debugging
+- **Auto Scaling**: Handles traffic spikes automatically
+
+### Post-Deployment Verification
+
+1. **Test Peer Analytics:**
+   - Select JPMorgan Chase as base bank
+   - Add 2-3 peer banks (Bank of America, Wells Fargo, etc.)
+   - Choose ROE metric and run analysis
+   - Verify AI analysis and chart display
+
+2. **Test Financial Reports:**
+   - Try RAG mode with a major bank
+   - Upload a sample 10-K PDF file
+   - Ask questions about financial performance
+   - Verify AI responses with specific data
+
+3. **Check Logs (if issues):**
+   - Go to CloudWatch → Log Groups
+   - Find `/ecs/bankiq-platform` log group
+   - Review recent logs for errors
 
 ## 📁 Project Structure
 
@@ -157,9 +216,28 @@ current-repo/
 - Verify API endpoints are accessible
 
 ### Getting Help
-- Check AWS CloudWatch logs for backend errors
+
+**Before Deployment:**
+- Ensure you have AWS admin permissions
+- Verify Bedrock model access is approved
+- Confirm your IP address is correct
+
+**During Deployment:**
+- Monitor CloudFormation Events tab for progress
+- Deployment typically takes 10-15 minutes
+- Red events indicate issues (check IAM permissions)
+
+**After Deployment:**
+- Check AWS CloudWatch logs: `/ecs/bankiq-platform`
 - Review browser console for frontend issues
-- Ensure Bedrock models are enabled in your region
+- Verify Security Group allows your current IP
+- Test with different browsers if needed
+
+**Common Solutions:**
+- **Bedrock Access Denied**: Enable model access in Bedrock console
+- **Can't Access App**: Check your IP hasn't changed
+- **Slow Performance**: Wait for container warm-up (2-3 minutes)
+- **Analysis Fails**: Verify Bedrock models are enabled in your region
 
 ## 🤝 Contributing
 
