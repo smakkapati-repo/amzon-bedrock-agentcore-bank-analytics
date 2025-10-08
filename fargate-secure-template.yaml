@@ -268,13 +268,12 @@ Resources:
               awslogs-region: !Ref AWS::Region
               awslogs-stream-prefix: bankiq
 
-  # CloudWatch Log Group with encryption
+  # CloudWatch Log Group
   LogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
       LogGroupName: /ecs/bankiq-secure
       RetentionInDays: 7
-      # KmsKeyId: alias/aws/logs  # Removed due to validation issues
 
   # ECS Service in private subnets
   ECSService:
