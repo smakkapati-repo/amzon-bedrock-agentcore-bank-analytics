@@ -9,13 +9,18 @@ The advent of Generative AI has revolutionized how financial institutions can pr
 
 The AI can instantly correlate a bank's declining Net Interest Margin with industry-wide patterns, explain the strategic implications of Tier 1 Capital changes, or predict potential regulatory concerns based on CRE concentration trends. This GenAI-powered approach transforms raw regulatory data into conversational insights, enabling bank executives to ask natural language questions like "Why is our ROA underperforming compared to similar-sized banks?" and receive comprehensive, contextual analysis that considers market conditions, regulatory environment, and peer performance.
 
-## 🏗️ Modern Architecture
+## 🏗️ AWS Architecture
 
-```
-React Frontend (Port 3000) ↔ Flask Backend (Port 8001) ↔ AWS Bedrock
-                                        ↕
-                              SEC EDGAR API / FAISS RAG / FDIC APIs
-```
+![BankIQ+ AWS Architecture](architecture-diagram.png)
+
+**Key Components:**
+- **Application Load Balancer**: IP-restricted access (your IP only)
+- **ECS Fargate**: Serverless containers in private subnets
+- **Amazon Bedrock**: Claude 3 Haiku/Sonnet for AI analysis
+- **Amazon Titan**: Embeddings V2 for RAG search
+- **External APIs**: SEC EDGAR and FDIC for real-time data
+- **CloudWatch**: Comprehensive logging and monitoring
+- **Security Groups**: Network-level security controls
 
 ## 🎬 Demo
 
