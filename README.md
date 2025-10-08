@@ -50,48 +50,20 @@ React Frontend (Port 3000) ↔ Flask Backend (Port 8001) ↔ AWS Bedrock
 - **LDR** - Loan-to-Deposit Ratio: Loans as % of deposits
 - **CRE Concentration** - Commercial real estate loans as % of total capital
 
-## 🚀 Deployment Options
+## 🚀 One-Click Deployment
 
-### Option 1: One-Click CloudFormation Deployment (Recommended)
-[![Launch Stack](https://s3.amazonaws.com/cloudformation-examples/cloudformation-launch-stack.png)](https://console.aws.amazon.com/cloudformation/home#/stacks/create/review?templateURL=https://raw.githubusercontent.com/AWS-Samples-GenAI-FSI/peer-bank-analytics/main/deploy-template.yaml)
+[![Launch Stack](https://s3.amazonaws.com/cloudformation-examples/cloudformation-launch-stack.png)](https://console.aws.amazon.com/cloudformation/home#/stacks/create/review?templateURL=https://raw.githubusercontent.com/AWS-Samples-GenAI-FSI/peer-bank-analytics/main/fargate-template.yaml)
 
-- **Zero Configuration**: Only requires your IP address
-- **Auto Security**: Restricts access to your IP only  
-- **Ready in 15 minutes**: Fully automated React + Flask setup
-- **Production Ready**: Nginx reverse proxy included
-
-### Option 2: Local Development Setup
-
-#### Prerequisites
+**Prerequisites:**
 - AWS Account with Bedrock access enabled
-- Node.js 18+ and Python 3.11+
-- AWS CLI configured with appropriate permissions
+- Your current IP address (for security)
 
-#### Steps
-```bash
-# Clone repository
-git clone https://github.com/AWS-Samples-GenAI-FSI/peer-bank-analytics.git
-cd peer-bank-analytics/current-repo
-
-# Setup backend
-cd backend
-pip install -r requirements.txt
-python app.py
-
-# Setup frontend (new terminal)
-cd ../frontend
-npm install
-npm start
-```
-
-#### Configuration
-Create `.env` file in backend directory:
-```bash
-AWS_REGION=us-east-1
-AWS_ACCESS_KEY_ID=your_access_key_here
-AWS_SECRET_ACCESS_KEY=your_secret_key_here
-BEDROCK_MODEL_ID=anthropic.claude-3-5-sonnet-20241022-v2:0
-```
+**What you get:**
+- **Zero Configuration**: Fully automated deployment
+- **Serverless**: AWS Fargate handles scaling
+- **Secure**: Access restricted to your IP only
+- **Ready in 10 minutes**: Complete React + Flask setup
+- **Production Ready**: Load balancer and auto-scaling included
 
 ## 📁 Project Structure
 
@@ -117,14 +89,14 @@ current-repo/
 - **AI**: AWS Bedrock (Claude 3 Haiku/Sonnet)
 - **Search**: FAISS vector database
 - **APIs**: SEC EDGAR, FDIC
-- **Deployment**: AWS CloudFormation, EC2, Nginx
+- **Deployment**: AWS Fargate, CloudFormation, Application Load Balancer
 
 
 
 ## 🔐 Security & Architecture Highlights
 
 - **IP-Restricted Access**: Security Groups limit access to your IP only
-- **IAM Role-Based**: Minimal required permissions for Bedrock access
+- **IAM Role-Based**: Minimal required permissions for Bedrock and Fargate
 - **No Hardcoded Credentials**: Environment-based configuration
 - **Real-Time FDIC Integration**: Live banking data from official APIs
 - **Context-Aware AI**: Claude AI provides intelligent financial analysis
@@ -135,15 +107,15 @@ current-repo/
 ## 💰 Cost Management
 
 ### AWS Costs
-- **EC2 t3.medium**: ~$30/month for hosting
+- **Fargate**: ~$0.05/hour when running (~$1-2/day typical usage)
 - **Bedrock API calls**: Pay-per-request (~$0.01-0.10 per analysis)
-- **Data transfer**: Minimal for typical usage
-- **Typical Development Usage**: $1-5/day
+- **Load Balancer**: ~$0.025/hour
+- **No fixed costs**: Pay only for what you use
 
 ### Cost Optimization
+- **Serverless**: Pay only when running
 - Built-in caching reduces API calls
-- Session state management
-- Configurable timeout settings
+- Auto-scaling based on demand
 
 ## 📖 Usage Examples
 
@@ -171,7 +143,7 @@ current-repo/
 **"Application not loading":**
 - Wait 5-10 minutes for full CloudFormation deployment
 - Check Security Group allows your current IP
-- Verify EC2 instance is running
+- Verify Fargate service is running
 
 **"FDIC/SEC API connection failed":**
 - Check internet connectivity from EC2 instance
