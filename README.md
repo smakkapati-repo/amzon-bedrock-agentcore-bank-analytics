@@ -92,32 +92,36 @@ The AI can instantly correlate a bank's declining Net Interest Margin with indus
    - **Amazon Titan Embeddings V2**
 5. Wait for approval (usually instant)
 
-### One-Click Deployment
+### Secure Deployment
 
-[![Launch Stack](https://s3.amazonaws.com/cloudformation-examples/cloudformation-launch-stack.png)](https://console.aws.amazon.com/cloudformation/home#/stacks/create/review?templateURL=https://raw.githubusercontent.com/AWS-Samples-GenAI-FSI/peer-bank-analytics/main/fargate-template.yaml)
+**Get Your IP Address:**
+```bash
+curl -s https://checkip.amazonaws.com
+```
 
-**Step-by-Step:**
+**Deploy with CloudFormation:**
+```bash
+aws cloudformation create-stack \
+  --stack-name banking-analytics \
+  --template-body file://fargate-secure-template.yaml \
+  --parameters ParameterKey=YourIPAddress,ParameterValue=YOUR_IP_HERE \
+  --capabilities CAPABILITY_IAM
+```
 
-1. **Click the Launch Stack button above**
-   - Opens AWS CloudFormation console
-   - Template URL is pre-populated
+**Monitor Deployment:**
+```bash
+aws cloudformation describe-stacks \
+  --stack-name banking-analytics \
+  --query 'Stacks[0].StackStatus'
+```
 
-2. **Configure Stack Parameters:**
-   - **Stack name**: `bankiq-platform` (or your choice)
-   - **YourIPAddress**: Enter your public IP (find at [whatismyip.com](https://whatismyip.com))
-   - **VpcId**: Select your default VPC or existing VPC
-   - **SubnetIds**: Select 2+ public subnets in different AZs
-   - **ContainerImage**: `public.ecr.aws/x0b5g9m7/bankiq-platform:latest`
-
-3. **Review and Deploy:**
-   - Check "I acknowledge that AWS CloudFormation might create IAM resources"
-   - Click **Create Stack**
-   - Wait 10-15 minutes for deployment
-
-4. **Access Your Application:**
-   - Go to **Outputs** tab in CloudFormation
-   - Click the **ApplicationURL** link
-   - BankIQ+ should load successfully
+**Get Application URL:**
+```bash
+aws cloudformation describe-stacks \
+  --stack-name banking-analytics \
+  --query 'Stacks[0].Outputs[?OutputKey==`ApplicationURL`].OutputValue' \
+  --output text
+```
 
 ### What Gets Deployed
 
