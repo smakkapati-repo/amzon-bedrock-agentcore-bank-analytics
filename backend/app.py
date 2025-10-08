@@ -26,7 +26,7 @@ def get_banking_data():
     banks = [
         "JPMORGAN CHASE BANK", "BANK OF AMERICA", "WELLS FARGO BANK", 
         "CITIBANK", "U.S. BANK", "PNC BANK", "GOLDMAN SACHS BANK",
-        "TRUIST BANK", "CAPITAL ONE", "TD BANK"
+        "TRUIST BANK", "CAPITAL ONE", "FIFTH THIRD BANCORP", "REGIONS FINANCIAL CORP"
     ]
     
     quarters = ["2023-Q1", "2023-Q2", "2023-Q3", "2023-Q4", "2024-Q1"]
