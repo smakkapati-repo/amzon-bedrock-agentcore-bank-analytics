@@ -77,6 +77,10 @@ The AI can instantly correlate a bank's declining Net Interest Margin with indus
 - AWS Account with administrative access
 - AWS Bedrock access enabled (see setup below)
 - Your current public IP address
+- **AWS Service Limits**: Ensure you have available capacity:
+  - VPCs: 5 per region (default limit)
+  - Internet Gateways: 5 per region (default limit)
+  - If at limits, delete unused VPCs/IGWs or request limit increases
 
 **Enable Bedrock Access:**
 1. Go to [AWS Bedrock Console](https://console.aws.amazon.com/bedrock/)
@@ -251,6 +255,7 @@ current-repo/
 - **Can't Access App**: Check your IP hasn't changed
 - **Slow Performance**: Wait for container warm-up (2-3 minutes)
 - **Analysis Fails**: Verify Bedrock models are enabled in your region
+- **VPC/IGW Limit Exceeded**: Delete unused VPCs and Internet Gateways from EC2 console
 
 ## 🤝 Contributing
 
