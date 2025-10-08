@@ -224,7 +224,7 @@ Resources:
       Protocol: HTTP
       VpcId: !Ref VPC
       TargetType: ip
-      HealthCheckPath: /api/fdic-data
+      HealthCheckPath: /health
       HealthCheckIntervalSeconds: 30
       HealthyThresholdCount: 2
       UnhealthyThresholdCount: 5

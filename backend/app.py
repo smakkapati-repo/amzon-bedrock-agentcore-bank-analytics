@@ -66,6 +66,10 @@ def get_banking_data():
     
     return pd.DataFrame(data)
 
+@app.route('/health')
+def health_check():
+    return jsonify({'status': 'healthy', 'service': 'BankIQ+'})
+
 @app.route('/api/fdic-data')
 def get_fdic_data():
     try:
