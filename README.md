@@ -17,6 +17,12 @@ React Frontend (Port 3000) ↔ Flask Backend (Port 8001) ↔ AWS Bedrock
                               SEC EDGAR API / FAISS RAG / FDIC APIs
 ```
 
+## 🎬 Demo
+
+![BankIQ+ Demo](demo.gif)
+
+*Interactive demo showing peer bank analytics, financial report analysis, and AI-powered insights*
+
 ## ✨ Platform Features
 
 ### 📊 Peer Bank Analytics
