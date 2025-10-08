@@ -145,23 +145,6 @@ aws cloudformation describe-stacks \
    - Find `/ecs/bankiq-platform` log group
    - Review recent logs for errors
 
-## 📁 Project Structure
-
-```
-current-repo/
-├── frontend/                 # React application
-│   ├── src/
-│   │   ├── components/      # React components
-│   │   └── services/        # API services
-│   └── public/              # Static files & templates
-├── backend/                 # Flask API server
-│   ├── app.py              # Main Flask application
-│   ├── rag_system.py       # FAISS vector search
-│   ├── sec_edgar_live.py   # SEC API integration
-│   └── bank_search.py      # Bank search functionality
-└── deploy-template.yaml    # CloudFormation template
-```
-
 ## 🔧 Technology Stack
 
 - **Frontend**: React, Material-UI, Recharts
