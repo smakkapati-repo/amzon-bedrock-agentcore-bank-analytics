@@ -201,7 +201,14 @@ function FinancialReports() {
           <Button 
             variant={mode === 'local' ? 'contained' : 'text'} 
             size="small"
-            onClick={() => setMode('local')}
+            onClick={() => {
+              setMode('local');
+              setSelectedBank('');
+              setChatHistory([]);
+              setFullReport('');
+              setReports({ '10-K': [], '10-Q': [] });
+              setError('');
+            }}
             startIcon={<DescriptionIcon />}
             sx={{ minWidth: 80, fontSize: '0.8rem' }}
           >
@@ -210,7 +217,16 @@ function FinancialReports() {
           <Button 
             variant={mode === 'rag' ? 'contained' : 'text'} 
             size="small"
-            onClick={() => setMode('rag')}
+            onClick={() => {
+              setMode('rag');
+              setSelectedBank('');
+              setChatHistory([]);
+              setFullReport('');
+              setReports({ '10-K': [], '10-Q': [] });
+              setUploadedFiles([]);
+              setAnalyzedDocs([]);
+              setError('');
+            }}
             startIcon={<StorageIcon />}
             sx={{ minWidth: 80, fontSize: '0.8rem' }}
           >
@@ -219,7 +235,16 @@ function FinancialReports() {
           <Button 
             variant={mode === 'live' ? 'contained' : 'text'} 
             size="small"
-            onClick={() => setMode('live')}
+            onClick={() => {
+              setMode('live');
+              setSelectedBank('');
+              setChatHistory([]);
+              setFullReport('');
+              setReports({ '10-K': [], '10-Q': [] });
+              setUploadedFiles([]);
+              setAnalyzedDocs([]);
+              setError('');
+            }}
             startIcon={<CloudIcon />}
             sx={{ minWidth: 80, fontSize: '0.8rem' }}
           >

@@ -220,7 +220,8 @@ def analyze_pdfs():
                 file_data = file.read()
                 pdf_reader = PyPDF2.PdfReader(io.BytesIO(file_data))
                 text = ''
-                for page in pdf_reader.pages[:3]:  # Only first 3 pages for speed
+                # Read first 10 pages for metadata extraction (faster than full document)
+                for page in pdf_reader.pages[:10]:
                     text += page.extract_text()
                 
                 # Extract bank name, form type, year
@@ -228,7 +229,7 @@ def analyze_pdfs():
                 form_type = '10-K' if '10-K' in text[:2000] else '10-Q' if '10-Q' in text[:2000] else 'Unknown'
                 year = '2024'
                 
-                text_upper = text[:3000].upper()
+                text_upper = text[:5000].upper()
                 
                 # Look for bank name patterns
                 if 'WEBSTER FINANCIAL' in text_upper:
@@ -255,7 +256,8 @@ def analyze_pdfs():
                     'bank_name': bank_name,
                     'form_type': form_type,
                     'year': year,
-                    'size': len(file_data)
+                    'size': len(file_data),
+                    'pages': len(pdf_reader.pages)
                 })
         
         return jsonify({'documents': analyzed_docs})
@@ -272,10 +274,12 @@ def chat_local():
         documents = []
         for file in files:
             if file.filename.endswith('.pdf'):
-                pdf_reader = PyPDF2.PdfReader(io.BytesIO(file.read()))
+                file_data = file.read()
+                pdf_reader = PyPDF2.PdfReader(io.BytesIO(file_data))
                 text = ''
+                # Read ALL pages to get complete content
                 for page in pdf_reader.pages:
-                    text += page.extract_text()
+                    text += page.extract_text() + '\n'
                 
                 # Extract bank name, form type, year from content
                 bank_name = 'Unknown Bank'
@@ -312,14 +316,23 @@ def chat_local():
                 })
         
         bedrock = boto3.client('bedrock-runtime')
-        context = '\n\n'.join([f"From {doc['bank_name']} {doc['form_type']} {doc['year']}:\n{doc['content'][:1000]}..." for doc in documents])
         
-        prompt = f"""Based on these uploaded financial documents:\n\n{context}\n\nAnswer: {message}"""
+        # Use more content for better analysis - chunk if too large
+        context_parts = []
+        for doc in documents:
+            content = doc['content']
+            # Use first 15000 chars for comprehensive analysis while staying within token limits
+            content_chunk = content[:15000] if len(content) > 15000 else content
+            context_parts.append(f"From {doc['bank_name']} {doc['form_type']} {doc['year']}:\n{content_chunk}")
+        
+        context = '\n\n'.join(context_parts)
+        
+        prompt = f"""You are a financial analyst. Based on these uploaded SEC financial documents:\n\n{context}\n\nProvide a detailed analysis to answer: {message}\n\nUse specific data, numbers, and quotes from the documents above. Focus on concrete financial metrics and performance indicators."""
         
         response = bedrock.converse(
             modelId="anthropic.claude-3-haiku-20240307-v1:0",
             messages=[{"role": "user", "content": [{"text": prompt}]}],
-            inferenceConfig={"maxTokens": 1000}
+            inferenceConfig={"maxTokens": 2000}
         )
         
         return jsonify({
