@@ -396,7 +396,7 @@ function PeerAnalytics() {
             </Select>
           </FormControl>
         </Grid>
-        <Grid item xs={12} md={2}>
+        <Grid item xs={12} md={1}>
           <Button 
             variant="contained" 
             fullWidth 
@@ -404,7 +404,27 @@ function PeerAnalytics() {
             disabled={!selectedBank || selectedPeers.length === 0 || !selectedMetric || loading}
             onClick={handleAnalysis}
           >
-            {loading ? <CircularProgress size={24} /> : 'Start Analysis'}
+            {loading ? <CircularProgress size={24} /> : 'Analyze'}
+          </Button>
+        </Grid>
+        <Grid item xs={12} md={1}>
+          <Button 
+            variant="outlined" 
+            fullWidth 
+            sx={{ height: 56 }}
+            onClick={() => {
+              setSelectedBank('');
+              setSelectedPeers([]);
+              setSelectedMetric('');
+              setAnalysis('');
+              setChartData([]);
+              setError('');
+              setUploadedData(null);
+              setUploadedBanks([]);
+              setUploadedMetrics([]);
+            }}
+          >
+            Reset
           </Button>
         </Grid>
       </Grid>
@@ -414,7 +434,7 @@ function PeerAnalytics() {
         <Card sx={{ mb: 4 }}>
           <CardContent>
             <Typography variant="h6" gutterBottom>
-              🤖 AI Analysis
+              🤖 {analysisType === 'Quarterly Metrics' ? 'Quarterly' : 'Monthly'} AI Analysis
             </Typography>
             <Typography variant="body1" sx={{ whiteSpace: 'pre-wrap' }}>
               {analysis}
@@ -453,18 +473,26 @@ function PeerAnalytics() {
                     }}
                   />
                   <Legend wrapperStyle={{ paddingTop: '20px' }} />
-                  {Object.keys(chartData[0] || {}).filter(key => key !== 'quarter').map((bank, index) => (
-                    <Line 
-                      key={bank}
-                      type="monotone" 
-                      dataKey={bank} 
-                      stroke={['#A020F0', '#FF6B35', '#00B4D8', '#90E0EF', '#F72585'][index % 5]} 
-                      strokeWidth={4}
-                      strokeDasharray={index === 0 ? '0' : index === 1 ? '5,5' : index === 2 ? '10,5' : '15,5,5,5'}
-                      dot={{ fill: ['#A020F0', '#FF6B35', '#00B4D8', '#90E0EF', '#F72585'][index % 5], strokeWidth: 2, r: 6 }}
-                      activeDot={{ r: 8, stroke: ['#A020F0', '#FF6B35', '#00B4D8', '#90E0EF', '#F72585'][index % 5], strokeWidth: 2 }}
-                    />
-                  ))}
+                  {[selectedBank, ...selectedPeers].map((bankName, index) => {
+                    const cleanBankName = bankName.replace(' BANK', '').replace(' CORP', '').split(' ')[0];
+                    const dataKey = Object.keys(chartData[0] || {}).find(key => 
+                      key !== 'quarter' && key.toLowerCase().includes(cleanBankName.toLowerCase())
+                    ) || cleanBankName;
+                    
+                    return (
+                      <Line 
+                        key={bankName}
+                        type="monotone" 
+                        dataKey={dataKey}
+                        name={bankName}
+                        stroke={['#A020F0', '#FF6B35', '#00B4D8', '#90E0EF'][index % 4]} 
+                        strokeWidth={4}
+                        strokeDasharray={index === 0 ? '0' : index === 1 ? '5,5' : index === 2 ? '10,5' : '15,5,5,5'}
+                        dot={{ fill: ['#A020F0', '#FF6B35', '#00B4D8', '#90E0EF'][index % 4], strokeWidth: 2, r: 6 }}
+                        activeDot={{ r: 8, stroke: ['#A020F0', '#FF6B35', '#00B4D8', '#90E0EF'][index % 4], strokeWidth: 2 }}
+                      />
+                    );
+                  })}
                 </LineChart>
               </ResponsiveContainer>
             ) : (

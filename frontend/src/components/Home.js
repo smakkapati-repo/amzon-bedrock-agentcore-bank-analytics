@@ -33,7 +33,7 @@ function Home() {
     { label: 'Banks Analyzed', value: '29+', color: '#00778f' },
     { label: 'Metrics Tracked', value: '6+', color: '#00a897' },
     { label: 'Analysis Modes', value: '3', color: '#02c59b' },
-    { label: 'AI Models', value: '3+', color: '#A020F0' }
+    { label: 'AI Models', value: '2', color: '#A020F0' }
   ];
 
   return (
