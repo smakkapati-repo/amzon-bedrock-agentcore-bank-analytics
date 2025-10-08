@@ -13,14 +13,22 @@ The AI can instantly correlate a bank's declining Net Interest Margin with indus
 
 ![BankIQ+ AWS Architecture](architecture-diagram.png)
 
+*Simple architecture overview*
+
+### Detailed Architecture
+
+![BankIQ+ Detailed Architecture](detailed-architecture.png)
+
 **Key Components:**
+- **VPC with Public/Private Subnets**: Multi-AZ deployment for high availability
 - **Application Load Balancer**: IP-restricted access (your IP only)
 - **ECS Fargate**: Serverless containers in private subnets
 - **Amazon Bedrock**: Claude 3 Haiku/Sonnet for AI analysis
 - **Amazon Titan**: Embeddings V2 for RAG search
-- **External APIs**: SEC EDGAR and FDIC for real-time data
-- **CloudWatch**: Comprehensive logging and monitoring
+- **NAT Gateway**: Secure outbound internet access
 - **Security Groups**: Network-level security controls
+- **IAM Roles**: Minimal permissions for Bedrock access
+- **CloudWatch**: Comprehensive logging and monitoring
 
 ## 🎬 Demo
 
