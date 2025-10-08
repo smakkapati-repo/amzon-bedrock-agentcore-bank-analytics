@@ -274,7 +274,7 @@ Resources:
     Properties:
       LogGroupName: /ecs/bankiq-secure
       RetentionInDays: 7
-      KmsKeyId: alias/aws/logs
+      # KmsKeyId: alias/aws/logs  # Removed due to validation issues
 
   # ECS Service in private subnets
   ECSService:
