@@ -66,6 +66,10 @@ def get_banking_data():
     
     return pd.DataFrame(data)
 
+@app.route('/')
+def index():
+    return app.send_static_file('index.html')
+
 @app.route('/health')
 def health_check():
     return jsonify({'status': 'healthy', 'service': 'BankIQ+'})
