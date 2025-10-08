@@ -81,6 +81,21 @@ function PeerAnalytics() {
         'Fifth Third Bancorp': 'FIFTH THIRD BANCORP'
       };
       
+      // Reverse mapping for chart display
+      const reverseMap = {
+        'JPMORGAN CHASE BANK': 'JPMorgan',
+        'BANK OF AMERICA': 'BofA',
+        'WELLS FARGO BANK': 'Wells',
+        'CITIBANK': 'Citi',
+        'U.S. BANK': 'USB',
+        'PNC BANK': 'PNC',
+        'GOLDMAN SACHS BANK': 'Goldman',
+        'TRUIST BANK': 'Truist',
+        'CAPITAL ONE': 'CapOne',
+        'REGIONS FINANCIAL CORP': 'Regions',
+        'FIFTH THIRD BANCORP': 'Fifth'
+      };
+      
       const apiBaseBank = bankNameMap[selectedBank] || selectedBank;
       const apiPeerBanks = selectedPeers.map(bank => bankNameMap[bank] || bank);
       
@@ -147,12 +162,25 @@ function PeerAnalytics() {
   const processChartData = (data) => {
     if (!data || data.length === 0) return [];
     
+    const reverseMap = {
+      'JPMORGAN CHASE BANK': 'JPMorgan',
+      'BANK OF AMERICA': 'BofA',
+      'WELLS FARGO BANK': 'Wells',
+      'CITIBANK': 'Citi',
+      'U.S. BANK': 'USB',
+      'PNC BANK': 'PNC',
+      'GOLDMAN SACHS BANK': 'Goldman',
+      'TRUIST BANK': 'Truist',
+      'CAPITAL ONE': 'CapOne',
+      'REGIONS FINANCIAL CORP': 'Regions',
+      'FIFTH THIRD BANCORP': 'Fifth'
+    };
+    
     const quarters = [...new Set(data.map(d => d.Quarter))].sort();
     return quarters.map(quarter => {
       const quarterData = { quarter };
       data.filter(d => d.Quarter === quarter).forEach(d => {
-        // Use bank name directly, clean it up
-        const bankName = d.Bank.replace(' BANK', '').replace(' CORP', '').split(' ')[0];
+        const bankName = reverseMap[d.Bank] || d.Bank.replace(' BANK', '').replace(' CORP', '').split(' ')[0];
         quarterData[bankName] = d.Value;
       });
       return quarterData;
@@ -474,10 +502,21 @@ function PeerAnalytics() {
                   />
                   <Legend wrapperStyle={{ paddingTop: '20px' }} />
                   {[selectedBank, ...selectedPeers].map((bankName, index) => {
-                    const cleanBankName = bankName.replace(' BANK', '').replace(' CORP', '').split(' ')[0];
-                    const dataKey = Object.keys(chartData[0] || {}).find(key => 
-                      key !== 'quarter' && key.toLowerCase().includes(cleanBankName.toLowerCase())
-                    ) || cleanBankName;
+                    const bankNameMap = {
+                      'JPMorgan Chase': 'JPMorgan',
+                      'Bank of America': 'BofA',
+                      'Wells Fargo': 'Wells',
+                      'Citigroup': 'Citi',
+                      'U.S. Bancorp': 'USB',
+                      'PNC Financial': 'PNC',
+                      'Goldman Sachs': 'Goldman',
+                      'Truist Financial': 'Truist',
+                      'Capital One': 'CapOne',
+                      'Regions Financial': 'Regions',
+                      'Fifth Third Bancorp': 'Fifth'
+                    };
+                    
+                    const dataKey = bankNameMap[bankName] || bankName;
                     
                     return (
                       <Line 
