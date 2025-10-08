@@ -9,7 +9,7 @@ from bank_search import bank_search
 import PyPDF2
 import io
 
-app = Flask(__name__)
+app = Flask(__name__, static_folder='static', static_url_path='')
 CORS(app)
 
 # Initialize RAG system on startup
@@ -69,6 +69,14 @@ def get_banking_data():
 @app.route('/')
 def index():
     return app.send_static_file('index.html')
+
+@app.route('/<path:path>')
+def serve_static(path):
+    try:
+        return app.send_static_file(path)
+    except:
+        # For React Router - serve index.html for any unknown routes
+        return app.send_static_file('index.html')
 
 @app.route('/health')
 def health_check():
