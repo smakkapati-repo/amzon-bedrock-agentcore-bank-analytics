@@ -103,7 +103,7 @@ curl -s https://checkip.amazonaws.com
 ```bash
 aws cloudformation create-stack \
   --stack-name banking-analytics \
-  --template-body file://fargate-secure-template.yaml \
+  --template-body file://cloudformation-template.yaml \
   --parameters ParameterKey=YourIPAddress,ParameterValue=YOUR_IP_HERE \
   --capabilities CAPABILITY_IAM
 ```
