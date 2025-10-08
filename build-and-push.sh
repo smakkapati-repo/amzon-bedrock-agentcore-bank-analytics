@@ -12,8 +12,8 @@ AWS_REGION="us-east-1"
 
 echo "🏗️  Building BankIQ+ Docker image..."
 
-# Build the image
-docker build -t $REPO_NAME .
+# Build the image for x86_64 architecture (ECS Fargate compatible)
+docker build --platform linux/amd64 -t $REPO_NAME .
 
 echo "🔍 Getting ECR Public login..."
 
