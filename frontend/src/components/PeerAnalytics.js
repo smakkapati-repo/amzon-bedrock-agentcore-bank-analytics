@@ -143,7 +143,9 @@ function PeerAnalytics() {
       setAnalysis(result.analysis);
       
       console.log('API Response:', result);
+      console.log('Selected banks:', [selectedBank, ...selectedPeers]);
       if (result.data && result.data.length > 0) {
+        console.log('Raw data from API:', result.data);
         const processedData = processChartData(result.data);
         console.log('Processed chart data:', processedData);
         setChartData(processedData);
@@ -501,37 +503,19 @@ function PeerAnalytics() {
                     }}
                   />
                   <Legend wrapperStyle={{ paddingTop: '20px' }} />
-                  {[selectedBank, ...selectedPeers].map((bankName, index) => {
-                    const bankNameMap = {
-                      'JPMorgan Chase': 'JPMorgan',
-                      'Bank of America': 'BofA',
-                      'Wells Fargo': 'Wells',
-                      'Citigroup': 'Citi',
-                      'U.S. Bancorp': 'USB',
-                      'PNC Financial': 'PNC',
-                      'Goldman Sachs': 'Goldman',
-                      'Truist Financial': 'Truist',
-                      'Capital One': 'CapOne',
-                      'Regions Financial': 'Regions',
-                      'Fifth Third Bancorp': 'Fifth'
-                    };
-                    
-                    const dataKey = bankNameMap[bankName] || bankName;
-                    
-                    return (
-                      <Line 
-                        key={bankName}
-                        type="monotone" 
-                        dataKey={dataKey}
-                        name={bankName}
-                        stroke={['#A020F0', '#FF6B35', '#00B4D8', '#90E0EF'][index % 4]} 
-                        strokeWidth={4}
-                        strokeDasharray={index === 0 ? '0' : index === 1 ? '5,5' : index === 2 ? '10,5' : '15,5,5,5'}
-                        dot={{ fill: ['#A020F0', '#FF6B35', '#00B4D8', '#90E0EF'][index % 4], strokeWidth: 2, r: 6 }}
-                        activeDot={{ r: 8, stroke: ['#A020F0', '#FF6B35', '#00B4D8', '#90E0EF'][index % 4], strokeWidth: 2 }}
-                      />
-                    );
-                  })}
+                  {Object.keys(chartData[0] || {}).filter(key => key !== 'quarter').map((dataKey, index) => (
+                    <Line 
+                      key={dataKey}
+                      type="monotone" 
+                      dataKey={dataKey}
+                      name={dataKey}
+                      stroke={['#A020F0', '#FF6B35', '#00B4D8', '#90E0EF'][index % 4]} 
+                      strokeWidth={4}
+                      strokeDasharray={index === 0 ? '0' : index === 1 ? '5,5' : index === 2 ? '10,5' : '15,5,5,5'}
+                      dot={{ fill: ['#A020F0', '#FF6B35', '#00B4D8', '#90E0EF'][index % 4], strokeWidth: 2, r: 6 }}
+                      activeDot={{ r: 8, stroke: ['#A020F0', '#FF6B35', '#00B4D8', '#90E0EF'][index % 4], strokeWidth: 2 }}
+                    />
+                  ))}
                 </LineChart>
               </ResponsiveContainer>
             ) : (
