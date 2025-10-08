@@ -1,4 +1,4 @@
-const API_BASE = window.location.origin;
+const API_BASE = 'http://localhost:8001';
 
 export const api = {
   // FDIC Banking Data
