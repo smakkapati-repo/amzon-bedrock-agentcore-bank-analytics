@@ -281,7 +281,7 @@ def analyze_pdfs():
                 # If no generic match, try specific patterns
                 if bank_name == 'Unknown Bank':
                     # Common bank patterns
-                bank_patterns = [
+                    bank_patterns = [
                     (r'WEBSTER\s+FINANCIAL', 'WEBSTER FINANCIAL'),
                     (r'JPMORGAN\s+CHASE', 'JPMORGAN CHASE'),
                     (r'BANK\s+OF\s+AMERICA', 'BANK OF AMERICA'),
