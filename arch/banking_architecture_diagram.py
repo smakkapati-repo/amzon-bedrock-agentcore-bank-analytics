@@ -74,10 +74,8 @@ with Diagram(
             with Cluster("Public Subnet", graph_attr={"bgcolor": "white", "style": "rounded"}):
                 alb = ElasticLoadBalancing("Application\nLoad Balancer")
                 
-                # ECS Fargate Services
-                with Cluster("ECS Fargate Cluster", graph_attr={"bgcolor": "white", "style": "rounded"}):
-                    ecs_cluster = ECS("ECS Cluster\npeer-bank-analytics")
-                    fargate_service = Fargate("Fargate Service\nReact + Flask App")
+                # ECS Fargate
+                ecs_fargate = Fargate("ECS Fargate\nReact + Flask App")
                 
                 # AI/ML Services
                 with Cluster("AI/ML Services", graph_attr={"bgcolor": "white", "style": "rounded"}):
@@ -107,21 +105,20 @@ with Diagram(
     admin_users >> Edge(label="Admin Access", color="#FF6B6B", style="dashed") >> igw >> alb
     
     # Step 2: Container Orchestration
-    alb >> Edge(label="2. Forward Request", color="#4CAF50") >> ecs_cluster
-    ecs_cluster >> fargate_service
+    alb >> Edge(label="2. Forward Request", color="#4CAF50") >> ecs_fargate
     
     # Step 3: External Data Integration - single connection to cluster
-    fargate_service >> Edge(label="3. External Data APIs", color="#2196F3") >> fdic_api
+    ecs_fargate >> Edge(label="3. External Data APIs", color="#2196F3") >> fdic_api
     
     # Step 4: AI/ML Processing
-    fargate_service >> Edge(label="4. AI Analysis", color="#9C27B0") >> bedrock
-    fargate_service >> Edge(label="5. Vector Search", color="#9C27B0") >> vector_db
+    ecs_fargate >> Edge(label="4. AI Analysis", color="#9C27B0") >> bedrock
+    ecs_fargate >> Edge(label="5. Vector Search", color="#9C27B0") >> vector_db
     
     # Step 6: Data Management
-    fargate_service >> Edge(label="6. Document Storage", color="#FF5722") >> s3_bucket
+    ecs_fargate >> Edge(label="6. Document Storage", color="#FF5722") >> s3_bucket
     
     # Container Deployment
-    ecr_repo >> Edge(label="Deploy Image", color="#FF9800") >> fargate_service
+    ecr_repo >> Edge(label="Deploy Image", color="#FF9800") >> ecs_fargate
     
     # Infrastructure Services - single connection to cluster
-    fargate_service >> Edge(label="Logs, Credentials & Permissions", color="#607D8B") >> cloudwatch
+    ecs_fargate >> Edge(label="Logs, Credentials & Permissions", color="#607D8B") >> cloudwatch
