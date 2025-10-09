@@ -12,6 +12,10 @@ import io
 app = Flask(__name__, static_folder='static', static_url_path='')
 CORS(app)
 
+# S3 client for PDF storage
+s3_client = boto3.client('s3')
+S3_BUCKET = 'bankiq-uploaded-docs'  # Will be created if doesn't exist
+
 # Initialize RAG system on startup
 with app.app_context():
     print("Initializing RAG system...")
@@ -236,21 +240,47 @@ def analyze_pdfs():
                 file_data = file.read()
                 pdf_reader = PyPDF2.PdfReader(io.BytesIO(file_data))
                 text = ''
-                # Read first 10 pages for metadata extraction (faster than full document)
-                for page in pdf_reader.pages[:10]:
-                    text += page.extract_text()
+                # Read first page for bank name extraction
+                first_page_text = pdf_reader.pages[0].extract_text().upper() if pdf_reader.pages else ''
+                
+                # Read ALL pages to get complete content
+                for page in pdf_reader.pages:
+                    text += page.extract_text() + '\n'
                 
                 # Extract bank name, form type, year
                 bank_name = 'Unknown Bank'
                 form_type = '10-K' if '10-K' in text[:2000] else '10-Q' if '10-Q' in text[:2000] else 'Unknown'
                 year = '2024'
                 
-                text_upper = text[:10000].upper()  # Look at more content
+                # Look for bank name in first page first, then broader search
+                text_upper = first_page_text + '\n' + text[:5000].upper()
                 
                 # Enhanced bank name patterns
                 import re
                 
-                # Common bank patterns
+                # Generic bank patterns (catch most banks)
+                generic_patterns = [
+                    (r'([A-Z][A-Z\s&]+)\s+BANK(?:ING)?(?:\s+(?:CORP|CORPORATION|COMPANY|CO|INC|NA|N\.A\.))?', 'BANK'),
+                    (r'([A-Z][A-Z\s&]+)\s+BANCORP(?:ORATION)?', 'BANCORP'),
+                    (r'([A-Z][A-Z\s&]+)\s+FINANCIAL(?:\s+(?:CORP|CORPORATION|COMPANY|CO|INC|GROUP))?', 'FINANCIAL'),
+                    (r'([A-Z][A-Z\s&]+)\s+BANCSHARES', 'BANCSHARES'),
+                    (r'([A-Z][A-Z\s&]+)\s+BANCSYSTEM', 'BANCSYSTEM'),
+                    (r'([A-Z][A-Z\s&]+)\s+TRUST(?:\s+(?:CORP|CORPORATION|COMPANY|CO))?', 'TRUST')
+                ]
+                
+                # Try generic patterns first
+                for pattern, suffix in generic_patterns:
+                    matches = re.findall(pattern, text_upper)
+                    if matches:
+                        # Clean up the match
+                        match = matches[0].strip()
+                        if len(match) > 3 and 'UNITED STATES' not in match and 'FEDERAL' not in match:
+                            bank_name = match + ' ' + suffix if suffix not in match else match
+                            break
+                
+                # If no generic match, try specific patterns
+                if bank_name == 'Unknown Bank':
+                    # Common bank patterns
                 bank_patterns = [
                     (r'WEBSTER\s+FINANCIAL', 'WEBSTER FINANCIAL'),
                     (r'JPMORGAN\s+CHASE', 'JPMORGAN CHASE'),
@@ -801,10 +831,10 @@ def analyze_pdfs():
                     (r'SPIRIT\s+OF\s+TEXAS', 'SPIRIT OF TEXAS BANCSHARES INC')
                 ]
                 
-                for pattern, name in bank_patterns:
-                    if re.search(pattern, text_upper):
-                        bank_name = name
-                        break
+                    for pattern, name in bank_patterns:
+                        if re.search(pattern, text_upper):
+                            bank_name = name
+                            break
                 
                 # Extract year
                 import re
@@ -812,13 +842,38 @@ def analyze_pdfs():
                 if years:
                     year = '20' + years[0]
                 
+                # Generate unique ID and store content in S3
+                import uuid
+                doc_id = str(uuid.uuid4())
+                
+                # Create S3 bucket if it doesn't exist
+                try:
+                    s3_client.head_bucket(Bucket=S3_BUCKET)
+                except:
+                    try:
+                        s3_client.create_bucket(Bucket=S3_BUCKET)
+                    except Exception as e:
+                        print(f"S3 bucket creation failed: {e}")
+                
+                # Store PDF content in S3
+                try:
+                    s3_client.put_object(
+                        Bucket=S3_BUCKET,
+                        Key=f"pdf-content/{doc_id}.txt",
+                        Body=text.encode('utf-8'),
+                        ContentType='text/plain'
+                    )
+                except Exception as e:
+                    print(f"S3 upload failed: {e}")
+                
                 analyzed_docs.append({
                     'filename': file.filename,
                     'bank_name': bank_name,
                     'form_type': form_type,
                     'year': year,
                     'size': len(file_data),
-                    'pages': len(pdf_reader.pages)
+                    'pages': len(pdf_reader.pages),
+                    'doc_id': doc_id
                 })
         
         return jsonify({'documents': analyzed_docs})
@@ -1005,16 +1060,26 @@ def generate_full_report():
                 yield f"data: {json.dumps({'status': 'Processing documents...', 'progress': 10})}\n\n"
                 
                 if mode == 'local':
-                    # For local mode, create context from analyzed docs
-                    yield f"data: {json.dumps({'status': 'Analyzing uploaded documents...', 'progress': 30})}\n\n"
+                    yield f"data: {json.dumps({'status': 'Extracting content from uploaded documents...', 'progress': 30})}\n\n"
                     
+                    # Get actual PDF content from S3
                     context_parts = []
                     for doc in analyzed_docs:
-                        context_parts.append(f"From {doc['bank_name']} {doc['form_type']} {doc['year']} (Uploaded Document):\nThis document contains comprehensive financial data including balance sheets, income statements, cash flow statements, risk factors, business operations, regulatory compliance information, and management discussion and analysis.")
+                        doc_id = doc.get('doc_id')
+                        if doc_id:
+                            try:
+                                response = s3_client.get_object(Bucket=S3_BUCKET, Key=f"pdf-content/{doc_id}.txt")
+                                content = response['Body'].read().decode('utf-8')
+                                # Use first 8000 chars to stay within token limits
+                                content_chunk = content[:8000] if len(content) > 8000 else content
+                                context_parts.append(f"From {doc['bank_name']} {doc['form_type']} {doc['year']}:\n{content_chunk}")
+                            except Exception as e:
+                                print(f"Failed to retrieve content from S3: {e}")
+                                context_parts.append(f"From {doc['bank_name']} {doc['form_type']} {doc['year']}:\nDocument content unavailable.")
                     
                     context = "\n\n".join(context_parts)
                     
-                    yield f"data: {json.dumps({'status': 'Generating report from uploaded files...', 'progress': 50})}\n\n"
+                    yield f"data: {json.dumps({'status': 'Generating report from actual document content...', 'progress': 50})}\n\n"
                 else:
                     # Search for comprehensive financial data
                     queries = [
@@ -1044,12 +1109,12 @@ def generate_full_report():
                 
                 if mode == 'local':
                     prompt = f"""
-Generate a comprehensive financial analysis report for {bank_name} based on uploaded financial documents.
+Generate a comprehensive financial analysis report for {bank_name} based on the actual content from uploaded SEC financial documents.
 
-Document Information:
+Actual Document Content:
 {context}
 
-Create a professional report with analysis in these sections:
+Create a detailed professional report with these sections:
 
 1. EXECUTIVE SUMMARY
 2. FINANCIAL PERFORMANCE ANALYSIS  
@@ -1059,7 +1124,7 @@ Create a professional report with analysis in these sections:
 6. REGULATORY ENVIRONMENT
 7. INVESTMENT RECOMMENDATIONS & OUTLOOK
 
-Note: This analysis is based on uploaded documents. Provide general financial analysis framework and insights typical for banking institutions.
+Use specific data, numbers, ratios, and quotes from the actual document content above. Focus on concrete financial metrics and performance indicators found in the documents.
 """
                 else:
                     prompt = f"""

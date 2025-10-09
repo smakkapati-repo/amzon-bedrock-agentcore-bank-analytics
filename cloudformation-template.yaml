@@ -187,6 +187,19 @@ Resources:
                   - bedrock:InvokeModel
                   - bedrock:InvokeModelWithResponseStream
                 Resource: '*'
+        - PolicyName: S3PDFStorageAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:CreateBucket
+                  - s3:PutObject
+                  - s3:GetObject
+                  - s3:HeadBucket
+                Resource:
+                  - 'arn:aws:s3:::bankiq-uploaded-docs'
+                  - 'arn:aws:s3:::bankiq-uploaded-docs/*'
 
   # Note: SSL Certificate removed - circular dependency issue
   # For production, create ACM certificate separately and reference ARN
