@@ -350,26 +350,50 @@ function FinancialReports() {
           ) : (
             <>
               <Typography variant="h6" gutterBottom>📄 Upload 10-K/10-Q PDF Files</Typography>
-              <input type="file" multiple accept=".pdf" onChange={async (e) => {
+              <input type="file" multiple accept=".pdf" onChange={(e) => {
                 const files = Array.from(e.target.files);
                 setUploadedFiles(files);
-                
-                const formData = new FormData();
-                files.forEach(file => formData.append('files', file));
-                
-                try {
-                  const response = await fetch('/api/analyze-pdfs', {
-                    method: 'POST',
-                    body: formData
-                  });
-                  const result = await response.json();
-                  setAnalyzedDocs(result.documents);
-                } catch (err) {
-                  console.error('PDF analysis failed:', err);
-                }
+                setAnalyzedDocs([]);
               }} style={{display: 'none'}} id="file-upload" />
-              <label htmlFor="file-upload"><Button variant="outlined" component="span">Choose PDF Files</Button></label>
-              {uploadedFiles.length > 0 && (
+              <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', mb: 2 }}>
+                <label htmlFor="file-upload">
+                  <Button variant="outlined" component="span">Choose PDF Files</Button>
+                </label>
+                {uploadedFiles.length > 0 && (
+                  <Button 
+                    variant="contained" 
+                    onClick={async () => {
+                      const formData = new FormData();
+                      uploadedFiles.forEach(file => formData.append('files', file));
+                      
+                      try {
+                        setLoading(true);
+                        const response = await fetch('/api/analyze-pdfs', {
+                          method: 'POST',
+                          body: formData
+                        });
+                        const result = await response.json();
+                        setAnalyzedDocs(result.documents);
+                      } catch (err) {
+                        setError('PDF analysis failed');
+                      } finally {
+                        setLoading(false);
+                      }
+                    }}
+                    disabled={loading}
+                  >
+                    {loading ? <CircularProgress size={20} sx={{ mr: 1 }} /> : '📤'} Upload & Analyze
+                  </Button>
+                )}
+              </Box>
+              
+              {analyzedDocs.length > 0 && (
+                <Alert severity="success" sx={{ mb: 2 }}>
+                  ✅ Successfully uploaded {analyzedDocs.map(doc => `${doc.bank_name} ${doc.form_type}`).join(', ')} document{analyzedDocs.length > 1 ? 's' : ''}
+                </Alert>
+              )}
+              
+              {uploadedFiles.length > 0 && analyzedDocs.length === 0 && (
                 <List>
                   {uploadedFiles.map((file, i) => (
                     <ListItem key={i}>

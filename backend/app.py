@@ -255,30 +255,50 @@ def analyze_pdfs():
                 # Look for bank name in first page first, then broader search
                 text_upper = first_page_text + '\n' + text[:5000].upper()
                 
-                # Enhanced bank name patterns
+                # Enhanced company name extraction
                 import re
                 
-                # Generic bank patterns (catch most banks)
-                generic_patterns = [
-                    (r'([A-Z][A-Z\s&]+)\s+BANK(?:ING)?(?:\s+(?:CORP|CORPORATION|COMPANY|CO|INC|NA|N\.A\.))?', 'BANK'),
-                    (r'([A-Z][A-Z\s&]+)\s+BANCORP(?:ORATION)?', 'BANCORP'),
-                    (r'([A-Z][A-Z\s&]+)\s+FINANCIAL(?:\s+(?:CORP|CORPORATION|COMPANY|CO|INC|GROUP))?', 'FINANCIAL'),
-                    (r'([A-Z][A-Z\s&]+)\s+BANCSHARES', 'BANCSHARES'),
-                    (r'([A-Z][A-Z\s&]+)\s+BANCSYSTEM', 'BANCSYSTEM'),
-                    (r'([A-Z][A-Z\s&]+)\s+TRUST(?:\s+(?:CORP|CORPORATION|COMPANY|CO))?', 'TRUST')
+                # First try standard SEC document patterns
+                sec_patterns = [
+                    r'COMPANY:\s*([A-Z][A-Z\s&,\.\-]+?)(?:\s*\n|\s*FORM)',
+                    r'REGISTRANT:\s*([A-Z][A-Z\s&,\.\-]+?)(?:\s*\n|\s*CIK)',
+                    r'([A-Z][A-Z\s&,\.\-]+?)\s*\n\s*\(EXACT NAME OF REGISTRANT',
+                    r'([A-Z][A-Z\s&,\.\-]+?)\s*\n\s*\(NAME OF REGISTRANT',
+                    r'COMMISSION FILE NO[^\n]*\n\s*([A-Z][A-Z\s&,\.\-]+?)\s*\n\s*\(EXACT NAME',
+                    r'FILE NO[^\n]*\n\s*([A-Z][A-Z\s&,\.\-]+?)\s*\n\s*\(EXACT NAME'
                 ]
                 
-                # Try generic patterns first
-                for pattern, suffix in generic_patterns:
-                    matches = re.findall(pattern, text_upper)
+                # Try SEC document patterns first
+                for pattern in sec_patterns:
+                    matches = re.findall(pattern, text_upper[:3000])
                     if matches:
-                        # Clean up the match
-                        match = matches[0].strip()
-                        if len(match) > 3 and 'UNITED STATES' not in match and 'FEDERAL' not in match:
-                            bank_name = match + ' ' + suffix if suffix not in match else match
+                        match = matches[0].strip().rstrip(',')
+                        if len(match) > 5 and 'UNITED STATES' not in match and 'SECURITIES' not in match:
+                            bank_name = match
                             break
                 
-                # If no generic match, try specific patterns
+                # If no SEC pattern match, try generic financial company patterns
+                if bank_name == 'Unknown Bank':
+                    generic_patterns = [
+                        (r'([A-Z][A-Z\s&]+)\s+BANK(?:ING)?(?:\s+(?:CORP|CORPORATION|COMPANY|CO|INC|NA|N\.A\.))?', 'BANK'),
+                        (r'([A-Z][A-Z\s&]+)\s+BANCORP(?:ORATION)?', 'BANCORP'),
+                        (r'([A-Z][A-Z\s&]+)\s+FINANCIAL(?:\s+(?:CORP|CORPORATION|COMPANY|CO|INC|GROUP))?', 'FINANCIAL'),
+                        (r'([A-Z][A-Z\s&]+)\s+BANCSHARES', 'BANCSHARES'),
+                        (r'([A-Z][A-Z\s&]+)\s+BANCSYSTEM', 'BANCSYSTEM'),
+                        (r'([A-Z][A-Z\s&]+)\s+TRUST(?:\s+(?:CORP|CORPORATION|COMPANY|CO))?', 'TRUST'),
+                        (r'([A-Z][A-Z\s&]+)\s+INC\.?', 'INC'),
+                        (r'([A-Z][A-Z\s&]+)\s+CORP(?:ORATION)?', 'CORP')
+                    ]
+                    
+                    for pattern, suffix in generic_patterns:
+                        matches = re.findall(pattern, text_upper)
+                        if matches:
+                            match = matches[0].strip()
+                            if len(match) > 3 and 'UNITED STATES' not in match and 'FEDERAL' not in match:
+                                bank_name = match + ' ' + suffix if suffix not in match else match
+                                break
+                
+                # If still no match, try specific company patterns
                 if bank_name == 'Unknown Bank':
                     # Common bank patterns
                     bank_patterns = [
