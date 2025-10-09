@@ -1,0 +1,578 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'BankIQ+ - Secure Banking Analytics Platform on AWS Fargate'
+
+Parameters:
+  YourIPAddress:
+    Type: String
+    Description: Your public IP address (get from whatismyip.com)
+    AllowedPattern: '^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$'
+    ConstraintDescription: Must be a valid IP address (e.g., 203.0.113.25)
+
+Resources:
+  # VPC and Networking
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - Key: Name
+          Value: BankIQ-Secure-VPC
+
+  # Public Subnets for ALB only
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.1.0/24
+      AvailabilityZone: !Select [0, !GetAZs '']
+      MapPublicIpOnLaunch: true
+
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.2.0/24
+      AvailabilityZone: !Select [1, !GetAZs '']
+      MapPublicIpOnLaunch: true
+
+  # Private Subnets for Fargate containers
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.3.0/24
+      AvailabilityZone: !Select [0, !GetAZs '']
+
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.4.0/24
+      AvailabilityZone: !Select [1, !GetAZs '']
+
+  # NAT Gateway for private subnet internet access
+  NATGateway1EIP:
+    Type: AWS::EC2::EIP
+    DependsOn: AttachGateway
+    Properties:
+      Domain: vpc
+
+  NATGateway1:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NATGateway1EIP.AllocationId
+      SubnetId: !Ref PublicSubnet1
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+
+  AttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+
+  PrivateRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+
+  PublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: AttachGateway
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  PrivateRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NATGateway1
+
+  PublicSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet1
+      RouteTableId: !Ref PublicRouteTable
+
+  PublicSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet2
+      RouteTableId: !Ref PublicRouteTable
+
+  PrivateSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet1
+      RouteTableId: !Ref PrivateRouteTable
+
+  PrivateSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet2
+      RouteTableId: !Ref PrivateRouteTable
+
+  # Security Groups
+  ALBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for Application Load Balancer - IP restricted
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: !Sub '${YourIPAddress}/32'
+          Description: HTTPS access from your IP only
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: !Sub '${YourIPAddress}/32'
+          Description: HTTP redirect from your IP only
+
+  FargateSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for Fargate containers - ALB access only
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 8001
+          ToPort: 8001
+          SourceSecurityGroupId: !Ref ALBSecurityGroup
+          Description: Access from ALB only
+
+  # IAM Roles with minimal permissions
+  TaskExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+
+  # S3 Bucket for SEC filings backup
+  SECFilingsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 'bankiq-sec-filings-${AWS::AccountId}-${AWS::Region}'
+      VersioningConfiguration:
+        Status: Enabled
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      NotificationConfiguration:
+        LambdaConfigurations:
+          - Event: s3:ObjectCreated:*
+            Function: !GetAtt SECDataPopulatorFunction.Arn
+            Filter:
+              S3Key:
+                Rules:
+                  - Name: prefix
+                    Value: '_trigger'
+
+  # Lambda function to populate S3 with SEC data
+  SECDataPopulatorFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub 'bankiq-sec-populator-${AWS::StackName}'
+      Runtime: python3.11
+      Handler: index.lambda_handler
+      Timeout: 900
+      MemorySize: 1024
+      Role: !GetAtt SECPopulatorRole.Arn
+      Code:
+        ZipFile: |
+          import boto3
+          import requests
+          import json
+          import time
+          
+          def lambda_handler(event, context):
+              s3 = boto3.client('s3')
+              bucket = event['Records'][0]['s3']['bucket']['name']
+              
+              banks = {
+                  'JPMORGAN_CHASE': '19617', 'BANK_OF_AMERICA': '70858', 'WELLS_FARGO': '72971',
+                  'CITIGROUP': '831001', 'GOLDMAN_SACHS': '886982'
+              }
+              
+              headers = {'User-Agent': 'BankIQ+ Research (contact@example.com)'}
+              uploaded = 0
+              
+              for bank_name, cik in banks.items():
+                  print(f'Processing {bank_name}...')
+                  
+                  url = f'https://data.sec.gov/submissions/CIK{cik.zfill(10)}.json'
+                  response = requests.get(url, headers=headers, timeout=10)
+                  
+                  if response.status_code == 200:
+                      data = response.json()
+                      recent = data.get('filings', {}).get('recent', {})
+                      
+                      forms = recent.get('form', [])
+                      dates = recent.get('filingDate', [])
+                      accessions = recent.get('accessionNumber', [])
+                      primary_docs = recent.get('primaryDocument', [])
+                      
+                      count = 0
+                      for i, (form, date, accession) in enumerate(zip(forms, dates, accessions)):
+                          if form in ['10-K', '10-Q'] and date >= '2024-01-01' and count < 2:
+                              primary_doc = primary_docs[i] if i < len(primary_docs) else None
+                              
+                              accession_clean = accession.replace('-', '')
+                              filing_url = f'https://www.sec.gov/Archives/edgar/data/{cik}/{accession_clean}/{primary_doc}' if primary_doc else f'https://www.sec.gov/Archives/edgar/data/{cik}/{accession_clean}/{accession}.txt'
+                              
+                              try:
+                                  filing_response = requests.get(filing_url, headers=headers, timeout=15)
+                                  if filing_response.status_code == 200:
+                                      s3_key = f'{bank_name}/{date[:4]}/{form}/{accession}.txt'
+                                      s3.put_object(
+                                          Bucket=bucket,
+                                          Key=s3_key,
+                                          Body=filing_response.text.encode('utf-8'),
+                                          ContentType='text/plain'
+                                      )
+                                      uploaded += 1
+                                      count += 1
+                                      print(f'Uploaded {form} {date}')
+                              except Exception as e:
+                                  print(f'Failed to download {accession}: {e}')
+                              
+                              time.sleep(0.1)
+                      
+                      time.sleep(0.2)
+              
+              print(f'Populated S3 with {uploaded} SEC filings')
+              return {'statusCode': 200, 'body': json.dumps(f'Uploaded {uploaded} files')}
+
+  # IAM Role for Lambda
+  SECPopulatorRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: S3Access
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:GetObject
+                Resource: !Sub 'arn:aws:s3:::${SECFilingsBucket}/*'
+
+  # Lambda permission for S3 to invoke
+  SECPopulatorPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref SECDataPopulatorFunction
+      Action: lambda:InvokeFunction
+      Principal: s3.amazonaws.com
+      SourceArn: !Sub 'arn:aws:s3:::${SECFilingsBucket}'
+
+  # Custom resource to trigger the Lambda
+  TriggerSECPopulation:
+    Type: AWS::CloudFormation::CustomResource
+    Properties:
+      ServiceToken: !GetAtt SECDataPopulatorFunction.Arn
+    DependsOn: SECFilingsBucket
+
+  TaskRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: BedrockMinimalAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - bedrock:InvokeModel
+                  - bedrock:InvokeModelWithResponseStream
+                Resource: '*'
+        - PolicyName: S3SECFilingsAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:ListBucket
+                Resource:
+                  - !Sub 'arn:aws:s3:::${SECFilingsBucket}/*'
+                  - !Sub 'arn:aws:s3:::${SECFilingsBucket}'
+
+  # Note: SSL Certificate removed - circular dependency issue
+  # For production, create ACM certificate separately and reference ARN
+
+  # ECS Cluster
+  ECSCluster:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName: bankiq-secure-cluster
+      ClusterSettings:
+        - Name: containerInsights
+          Value: enabled
+
+  # Application Load Balancer
+  ApplicationLoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: bankiq-secure-alb
+      Scheme: internet-facing
+      Type: application
+      Subnets:
+        - !Ref PublicSubnet1
+        - !Ref PublicSubnet2
+      SecurityGroups:
+        - !Ref ALBSecurityGroup
+
+  TargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: bankiq-secure-targets
+      Port: 8001
+      Protocol: HTTP
+      VpcId: !Ref VPC
+      TargetType: ip
+      HealthCheckPath: /health
+      HealthCheckIntervalSeconds: 30
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 5
+
+  HTTPListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref TargetGroup
+      LoadBalancerArn: !Ref ApplicationLoadBalancer
+      Port: 80
+      Protocol: HTTP
+
+  # ECS Task Definition
+  TaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: bankiq-secure-task
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+        - FARGATE
+      Cpu: 1024
+      Memory: 2048
+      ExecutionRoleArn: !Ref TaskExecutionRole
+      TaskRoleArn: !Ref TaskRole
+      ContainerDefinitions:
+        - Name: bankiq-container
+          Image: public.ecr.aws/x0b5g9m7/bankiq-platform:latest
+          Essential: true
+          PortMappings:
+            - ContainerPort: 8001
+              Protocol: tcp
+          Environment:
+            - Name: AWS_DEFAULT_REGION
+              Value: !Ref AWS::Region
+            - Name: SEC_FILINGS_BUCKET
+              Value: !Ref SECFilingsBucket
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref LogGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: bankiq
+
+  # Lambda function to populate S3 with SEC data
+  SECDataPopulatorFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub 'bankiq-sec-populator-${AWS::StackName}'
+      Runtime: python3.11
+      Handler: index.lambda_handler
+      Timeout: 900
+      MemorySize: 512
+      Role: !GetAtt SECDataPopulatorRole.Arn
+      Code:
+        ZipFile: |
+          import boto3
+          import requests
+          import json
+          import time
+          import cfnresponse
+          
+          def lambda_handler(event, context):
+              try:
+                  if event['RequestType'] == 'Create':
+                      bucket_name = event['ResourceProperties']['BucketName']
+                      populate_s3_with_sec_data(bucket_name)
+                  
+                  cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
+              except Exception as e:
+                  print(f'Error: {e}')
+                  cfnresponse.send(event, context, cfnresponse.FAILED, {})
+          
+          def populate_s3_with_sec_data(bucket_name):
+              s3 = boto3.client('s3')
+              headers = {'User-Agent': 'BankIQ+ Research (contact@example.com)'}
+              
+              banks = {
+                  'JPMORGAN_CHASE': '19617', 'BANK_OF_AMERICA': '70858', 'WELLS_FARGO': '72971',
+                  'CITIGROUP': '831001', 'GOLDMAN_SACHS': '886982'
+              }
+              
+              for bank_name, cik in banks.items():
+                  print(f'Processing {bank_name}...')
+                  
+                  url = f'https://data.sec.gov/submissions/CIK{cik.zfill(10)}.json'
+                  response = requests.get(url, headers=headers, timeout=10)
+                  
+                  if response.status_code == 200:
+                      data = response.json()
+                      recent = data.get('filings', {}).get('recent', {})
+                      
+                      forms = recent.get('form', [])
+                      dates = recent.get('filingDate', [])
+                      accessions = recent.get('accessionNumber', [])
+                      primary_docs = recent.get('primaryDocument', [])
+                      
+                      count = 0
+                      for i, (form, date, accession) in enumerate(zip(forms, dates, accessions)):
+                          if form in ['10-K', '10-Q'] and date >= '2024-01-01' and count < 2:
+                              primary_doc = primary_docs[i] if i < len(primary_docs) else None
+                              
+                              accession_clean = accession.replace('-', '')
+                              filing_url = f'https://www.sec.gov/Archives/edgar/data/{cik}/{accession_clean}/{primary_doc}' if primary_doc else f'https://www.sec.gov/Archives/edgar/data/{cik}/{accession_clean}/{accession}.txt'
+                              
+                              try:
+                                  filing_response = requests.get(filing_url, headers=headers, timeout=15)
+                                  if filing_response.status_code == 200:
+                                      s3_key = f'{bank_name}/{date[:4]}/{form}/{accession}.txt'
+                                      s3.put_object(
+                                          Bucket=bucket_name,
+                                          Key=s3_key,
+                                          Body=filing_response.text.encode('utf-8'),
+                                          ContentType='text/plain'
+                                      )
+                                      count += 1
+                                      print(f'Uploaded {form} {date}')
+                              except:
+                                  continue
+                              
+                              time.sleep(0.1)
+                  
+                  time.sleep(0.2)
+
+  SECDataPopulatorRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: S3Access
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:PutObjectAcl
+                Resource: !Sub 'arn:aws:s3:::${SECFilingsBucket}/*'
+
+  SECDataPopulatorTrigger:
+    Type: AWS::CloudFormation::CustomResource
+    DependsOn: SECFilingsBucket
+    Properties:
+      ServiceToken: !GetAtt SECDataPopulatorFunction.Arn
+      BucketName: !Ref SECFilingsBucket
+
+  # CloudWatch Log Group
+  LogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: /ecs/bankiq-secure
+      RetentionInDays: 7
+
+  # ECS Service in private subnets
+  ECSService:
+    Type: AWS::ECS::Service
+    DependsOn: HTTPListener
+    Properties:
+      ServiceName: bankiq-secure-service
+      Cluster: !Ref ECSCluster
+      TaskDefinition: !Ref TaskDefinition
+      LaunchType: FARGATE
+      DesiredCount: 1
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          SecurityGroups:
+            - !Ref FargateSecurityGroup
+          Subnets:
+            - !Ref PrivateSubnet1
+            - !Ref PrivateSubnet2
+          AssignPublicIp: DISABLED
+      LoadBalancers:
+        - ContainerName: bankiq-container
+          ContainerPort: 8001
+          TargetGroupArn: !Ref TargetGroup
+
+Outputs:
+  ApplicationURL:
+    Description: Secure HTTPS URL to access the BankIQ+ application
+    Value: !Sub 'http://${ApplicationLoadBalancer.DNSName}'
+    
+  LoadBalancerDNS:
+    Description: Load Balancer DNS Name
+    Value: !GetAtt ApplicationLoadBalancer.DNSName
+
+  SECFilingsBucket:
+    Description: S3 bucket for SEC filings backup
+    Value: !Ref SECFilingsBucket
+    
+  SecurityFeatures:
+    Description: Security features implemented
+    Value: "IP-restricted access, private subnets, minimal IAM permissions, encrypted logs"

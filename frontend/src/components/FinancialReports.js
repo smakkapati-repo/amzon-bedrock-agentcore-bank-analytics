@@ -108,7 +108,7 @@ function FinancialReports() {
       setFullReport('');
       setError('');
       
-      const response = await fetch('http://localhost:8001/api/generate-report', {
+      const response = await fetch('/api/generate-report', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ bankName: selectedBank, reports, useRAG: mode === 'rag', mode: mode, analyzedDocs: analyzedDocs })
@@ -126,8 +126,16 @@ function FinancialReports() {
         
         for (const line of lines) {
           if (line.startsWith('data: ')) {
+            const dataContent = line.slice(6).trim();
+            
+            // Check for end of stream signal
+            if (dataContent === '[DONE]') {
+              setReportLoading(false);
+              return;
+            }
+            
             try {
-              const data = JSON.parse(line.slice(6));
+              const data = JSON.parse(dataContent);
               
               if (data.chunk) {
                 setFullReport(prev => prev + data.chunk);
@@ -208,6 +216,7 @@ function FinancialReports() {
               setFullReport('');
               setReports({ '10-K': [], '10-Q': [] });
               setError('');
+              setReportLoading(false);
             }}
             startIcon={<DescriptionIcon />}
             sx={{ minWidth: 80, fontSize: '0.8rem' }}
@@ -226,6 +235,7 @@ function FinancialReports() {
               setUploadedFiles([]);
               setAnalyzedDocs([]);
               setError('');
+              setReportLoading(false);
             }}
             startIcon={<StorageIcon />}
             sx={{ minWidth: 80, fontSize: '0.8rem' }}
@@ -244,6 +254,7 @@ function FinancialReports() {
               setUploadedFiles([]);
               setAnalyzedDocs([]);
               setError('');
+              setReportLoading(false);
             }}
             startIcon={<CloudIcon />}
             sx={{ minWidth: 80, fontSize: '0.8rem' }}
@@ -347,7 +358,7 @@ function FinancialReports() {
                 files.forEach(file => formData.append('files', file));
                 
                 try {
-                  const response = await fetch('http://localhost:8001/api/analyze-pdfs', {
+                  const response = await fetch('/api/analyze-pdfs', {
                     method: 'POST',
                     body: formData
                   });

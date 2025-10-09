@@ -122,7 +122,7 @@ function PeerAnalytics() {
         
         // Generate AI analysis for local data
         try {
-          const analysisResponse = await fetch('http://localhost:8001/api/analyze-local-data', {
+          const analysisResponse = await fetch('/api/analyze-local-data', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
