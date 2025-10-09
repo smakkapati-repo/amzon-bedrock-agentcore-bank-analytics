@@ -34,7 +34,10 @@ Security and operational excellence are embedded throughout the architecture via
 
 ## 🎬 Demo
 
-![BankIQ+ Demo](demo.gif)
+<video width="800" controls>
+  <source src="demo.mp4" type="video/mp4">
+  <img src="demo.gif" alt="BankIQ+ Demo" width="800">
+</video>
 
 *Interactive demo showing peer bank analytics, financial report analysis, and AI-powered insights*
 
