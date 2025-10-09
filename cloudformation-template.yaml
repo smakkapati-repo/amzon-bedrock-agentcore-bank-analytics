@@ -153,6 +153,17 @@ Resources:
           SourceSecurityGroupId: !Ref ALBSecurityGroup
           Description: Access from ALB only
 
+  # S3 Bucket for uploaded documents
+  UploadedDocsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: bankiq-uploaded-docs
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
   # IAM Roles with minimal permissions
   TaskExecutionRole:
     Type: AWS::IAM::Role
@@ -271,6 +282,8 @@ Resources:
           Environment:
             - Name: AWS_DEFAULT_REGION
               Value: !Ref AWS::Region
+            - Name: DEPLOYMENT_VERSION
+              Value: "v2.1"
           LogConfiguration:
             LogDriver: awslogs
             Options:
