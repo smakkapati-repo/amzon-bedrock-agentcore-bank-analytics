@@ -382,7 +382,7 @@ function FinancialReports() {
                     }}
                     disabled={loading}
                   >
-                    {loading ? <CircularProgress size={20} sx={{ mr: 1 }} /> : '📤'} Upload & Analyze
+                    {loading ? <CircularProgress size={20} sx={{ mr: 1 }} /> : '📤'} Upload
                   </Button>
                 )}
               </Box>
