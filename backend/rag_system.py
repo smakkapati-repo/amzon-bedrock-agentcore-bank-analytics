@@ -193,18 +193,162 @@ class SECFilingsRAG:
                 
         return results
         
+    def load_documents_from_s3(self):
+        """Load documents from S3 bucket as fallback"""
+        import os
+        bucket_name = os.environ.get('SEC_FILINGS_BUCKET')
+        if not bucket_name:
+            print("No S3 bucket configured")
+            return False
+            
+        try:
+            s3 = boto3.client('s3')
+            print(f"Loading documents from S3 bucket: {bucket_name}")
+            
+            # List all objects in bucket
+            paginator = s3.get_paginator('list_objects_v2')
+            pages = paginator.paginate(Bucket=bucket_name)
+            
+            for page in pages:
+                for obj in page.get('Contents', []):
+                    key = obj['Key']
+                    if key.endswith('.txt'):
+                        # Parse S3 key: BANK/YEAR/FORM/accession.txt
+                        parts = key.split('/')
+                        if len(parts) == 4:
+                            bank, year, form, filename = parts
+                            
+                            # Download content
+                            response = s3.get_object(Bucket=bucket_name, Key=key)
+                            content = response['Body'].read().decode('utf-8')
+                            
+                            # Chunk and add to documents
+                            chunks = self.chunk_document(content)
+                            for i, chunk in enumerate(chunks):
+                                self.documents.append(chunk)
+                                self.metadata.append({
+                                    'bank': bank,
+                                    'year': year,
+                                    'filing_type': form,
+                                    'file': filename,
+                                    'chunk_id': i,
+                                    'source': 's3'
+                                })
+                            
+                            print(f"Loaded {len(chunks)} chunks from {key}")
+            
+            print(f"Loaded {len(self.documents)} document chunks from S3")
+            return len(self.documents) > 0
+            
+        except Exception as e:
+            print(f"Error loading from S3: {e}")
+            return False
+    
+    def auto_populate_s3(self):
+        """Automatically download and populate S3 with SEC data"""
+        import os
+        bucket_name = os.environ.get('SEC_FILINGS_BUCKET')
+        if not bucket_name:
+            return False
+            
+        try:
+            import requests
+            import time
+            
+            s3 = boto3.client('s3')
+            print("Auto-populating S3 with SEC filings...")
+            
+            # Major banks and CIKs
+            banks = {
+                'JPMORGAN_CHASE': '19617', 'BANK_OF_AMERICA': '70858', 'WELLS_FARGO': '72971',
+                'CITIGROUP': '831001', 'GOLDMAN_SACHS': '886982', 'MORGAN_STANLEY': '895421',
+                'US_BANCORP': '36104', 'PNC_FINANCIAL': '713676', 'CAPITAL_ONE': '927628', 'TRUIST': '92230'
+            }
+            
+            headers = {'User-Agent': 'BankIQ+ Research (contact@example.com)'}
+            uploaded = 0
+            
+            for bank_name, cik in banks.items():
+                print(f"Processing {bank_name}...")
+                
+                # Get recent filings only (faster)
+                url = f"https://data.sec.gov/submissions/CIK{cik.zfill(10)}.json"
+                response = requests.get(url, headers=headers, timeout=10)
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    recent = data.get('filings', {}).get('recent', {})
+                    
+                    forms = recent.get('form', [])
+                    dates = recent.get('filingDate', [])
+                    accessions = recent.get('accessionNumber', [])
+                    primary_docs = recent.get('primaryDocument', [])
+                    
+                    # Get 2 recent filings per bank (faster startup)
+                    count = 0
+                    for i, (form, date, accession) in enumerate(zip(forms, dates, accessions)):
+                        if form in ['10-K', '10-Q'] and date >= '2024-01-01' and count < 2:
+                            primary_doc = primary_docs[i] if i < len(primary_docs) else None
+                            
+                            # Download filing
+                            accession_clean = accession.replace('-', '')
+                            filing_url = f"https://www.sec.gov/Archives/edgar/data/{cik}/{accession_clean}/{primary_doc}" if primary_doc else f"https://www.sec.gov/Archives/edgar/data/{cik}/{accession_clean}/{accession}.txt"
+                            
+                            try:
+                                filing_response = requests.get(filing_url, headers=headers, timeout=15)
+                                if filing_response.status_code == 200:
+                                    s3_key = f"{bank_name}/{date[:4]}/{form}/{accession}.txt"
+                                    s3.put_object(
+                                        Bucket=bucket_name,
+                                        Key=s3_key,
+                                        Body=filing_response.text.encode('utf-8'),
+                                        ContentType='text/plain'
+                                    )
+                                    uploaded += 1
+                                    count += 1
+                                    print(f"  Uploaded {form} {date}")
+                            except:
+                                continue
+                            
+                            time.sleep(0.1)
+                
+                time.sleep(0.2)
+            
+            print(f"Auto-populated S3 with {uploaded} SEC filings")
+            return uploaded > 0
+            
+        except Exception as e:
+            print(f"Auto-population failed: {e}")
+            return False
+    
     def initialize(self):
-        """Initialize RAG system"""
-        if not self.load_index():
-            print("Index not found, building new one...")
-            self.load_documents()
-            if self.documents:
+        """Initialize RAG system with automatic S3 population"""
+        # Try local FAISS index first (fastest)
+        if self.load_index():
+            print("Using pre-built FAISS index")
+            return True
+        
+        print("FAISS index not found, checking S3...")
+        
+        # Check if S3 has data
+        if self.load_documents_from_s3():
+            print("Building FAISS index from S3 data...")
+            self.build_index()
+            self.save_index()
+            return True
+        
+        # Auto-populate S3 if empty
+        print("S3 empty, auto-populating with SEC data...")
+        if self.auto_populate_s3():
+            # Try loading from S3 again
+            if self.load_documents_from_s3():
+                print("Building FAISS index from auto-populated S3 data...")
                 self.build_index()
                 self.save_index()
-            else:
-                print("No documents loaded!")
-                return False
-        return True
+                return True
+        
+        print("All initialization methods failed!")
+        return False
 
 # Global RAG instance
 rag_system = SECFilingsRAG()
