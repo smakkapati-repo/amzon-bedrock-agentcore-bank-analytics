@@ -110,16 +110,15 @@ with Diagram(
     alb >> Edge(label="2. Forward Request", color="#4CAF50") >> ecs_cluster
     ecs_cluster >> fargate_service
     
-    # Step 3: External Data Integration
-    fargate_service >> Edge(label="3. Fetch Banking Data", color="#2196F3") >> fdic_api
-    fargate_service >> Edge(label="4. Retrieve Reports", color="#2196F3", labeldistance="0.1", labelangle="0") >> sec_api
+    # Step 3: External Data Integration - single connection to cluster
+    fargate_service >> Edge(label="3. External Data APIs", color="#2196F3") >> fdic_api
     
-    # Step 5: AI/ML Processing
-    fargate_service >> Edge(label="5. AI Analysis", color="#9C27B0") >> bedrock
-    fargate_service >> Edge(label="6. Vector Search", color="#9C27B0") >> vector_db
+    # Step 4: AI/ML Processing
+    fargate_service >> Edge(label="4. AI Analysis", color="#9C27B0") >> bedrock
+    fargate_service >> Edge(label="5. Vector Search", color="#9C27B0") >> vector_db
     
-    # Step 7: Data Management
-    fargate_service >> Edge(label="7. Document Storage", color="#FF5722") >> s3_bucket
+    # Step 6: Data Management
+    fargate_service >> Edge(label="6. Document Storage", color="#FF5722") >> s3_bucket
     
     # Container Deployment
     ecr_repo >> Edge(label="Deploy Image", color="#FF9800") >> fargate_service
