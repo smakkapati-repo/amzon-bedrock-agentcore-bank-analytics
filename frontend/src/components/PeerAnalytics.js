@@ -307,6 +307,13 @@ function PeerAnalytics() {
                       });
                       setUploadedData(data);
                       
+                      // Store CSV data in backend
+                      fetch('/api/store-csv-data', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ data: data, filename: file.name })
+                      }).catch(err => console.log('CSV storage failed:', err));
+                      
                       // Auto-populate fields from uploaded data
                       if (data.length > 0) {
                         // Get unique banks

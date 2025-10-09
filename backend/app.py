@@ -1233,5 +1233,33 @@ def search_banks():
         print(f"Bank search error: {e}")
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/store-csv-data', methods=['POST'])
+def store_csv_data():
+    try:
+        data = request.json
+        csv_data = data['data']
+        filename = data['filename']
+        
+        # Generate unique ID for CSV data
+        import uuid
+        csv_id = str(uuid.uuid4())
+        
+        # Store CSV data in S3
+        try:
+            s3_client.put_object(
+                Bucket=S3_BUCKET,
+                Key=f"csv-data/{csv_id}.json",
+                Body=json.dumps(csv_data).encode('utf-8'),
+                ContentType='application/json',
+                Metadata={'filename': filename}
+            )
+            return jsonify({'csv_id': csv_id, 'status': 'stored'})
+        except Exception as e:
+            print(f"CSV S3 storage failed: {e}")
+            return jsonify({'error': 'Storage failed'}), 500
+            
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=8001)
