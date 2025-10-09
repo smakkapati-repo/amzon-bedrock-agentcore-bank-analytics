@@ -7,13 +7,10 @@ from diagrams.aws.ml import Bedrock
 from diagrams.aws.management import Cloudwatch, SystemsManager
 from diagrams.aws.security import IAM, SecretsManager
 from diagrams.aws.general import User, Users, Client
-from diagrams.aws.general import General
 from diagrams.aws.database import Dynamodb
 from diagrams.onprem.client import Users as ExternalUsers
-from diagrams.generic.network import Firewall
-from diagrams.generic.database import SQL
-from diagrams.aws.network import APIGateway as APIGatewayIcon
-from diagrams.aws.analytics import Quicksight
+from diagrams.onprem.compute import Server
+from diagrams.onprem.inmemory import Redis
 from diagrams.programming.language import Python, Javascript
 
 # AWS-style professional configuration
@@ -31,8 +28,8 @@ graph_attr = {
 node_attr = {
     "fontsize": "11",
     "fontname": "Amazon Ember, Arial, sans-serif",
-    "style": "filled",
-    "fillcolor": "#FFFFFF",
+    "style": "",
+    "fillcolor": "none",
     "color": "#232F3E"
 }
 
@@ -52,89 +49,80 @@ with Diagram(
     filename="banking_peer_analytics_architecture"
 ):
     
-    # External entities
-    internet = Client("Internet")
+    with Cluster("External Data Sources", graph_attr={"bgcolor": "white", "style": "rounded", "rankdir": "LR"}):
+        fdic_api = Server("FDIC APIs\nReal-time Banking Data")
+        sec_api = Server("SEC EDGAR APIs\nFinancial Reports")
+        
+        # Force horizontal alignment
+        fdic_api - sec_api
     
-    with Cluster("External Data Sources", graph_attr={"bgcolor": "#E3F2FD", "style": "rounded"}):
-        fdic_api = APIGatewayIcon("FDIC APIs\nReal-time Banking Data")
-        sec_api = Quicksight("SEC EDGAR APIs\nFinancial Reports")
-    
-    with Cluster("Users", graph_attr={"bgcolor": "#FFF9C4", "style": "rounded"}):
+    with Cluster("Users", graph_attr={"bgcolor": "white", "style": "rounded"}):
         users = ExternalUsers("Banking Analysts\n& Executives")
         admin_users = User("System Administrators")
     
-    # AWS Cloud boundary
-    aws_cloud = General("AWS Cloud")
+
     
-    with Cluster("AWS Cloud Services", graph_attr={"bgcolor": "#F0F8FF", "style": "rounded", "color": "#232F3E"}):
+    with Cluster("AWS Cloud Services", graph_attr={"bgcolor": "white", "style": "rounded", "color": "#232F3E"}):
         
         # VPC
-        with Cluster("VPC - us-east-1", graph_attr={"bgcolor": "#E1F5FE", "style": "rounded"}):
+        with Cluster("VPC - us-east-1", graph_attr={"bgcolor": "white", "style": "rounded"}):
             
             # Internet Gateway
             igw = InternetGateway("Internet Gateway")
             
             # Public Subnet
-            with Cluster("Public Subnet", graph_attr={"bgcolor": "#B3E5FC", "style": "rounded"}):
+            with Cluster("Public Subnet", graph_attr={"bgcolor": "white", "style": "rounded"}):
                 alb = ElasticLoadBalancing("Application\nLoad Balancer")
                 
                 # ECS Fargate Services
-                with Cluster("ECS Fargate Cluster", graph_attr={"bgcolor": "#FFFFFF", "style": "rounded"}):
+                with Cluster("ECS Fargate Cluster", graph_attr={"bgcolor": "white", "style": "rounded"}):
                     ecs_cluster = ECS("ECS Cluster\npeer-bank-analytics")
                     fargate_service = Fargate("Fargate Service\nReact + Flask App")
-                    container_app = Python("Container\nReact + Flask API")
                 
                 # AI/ML Services
-                with Cluster("AI/ML Services", graph_attr={"bgcolor": "#F3E5F5", "style": "rounded"}):
+                with Cluster("AI/ML Services", graph_attr={"bgcolor": "white", "style": "rounded"}):
                     bedrock = Bedrock("Amazon Bedrock\nClaude 3.5 Sonnet")
-                    vector_db = Dynamodb("Vector Store\nFAISS Embeddings")
+                    vector_db = Redis("Vector Store\nFAISS Embeddings")
                 
                 # Data Services
-                with Cluster("Data & Storage", graph_attr={"bgcolor": "#E0F2F1", "style": "rounded"}):
+                with Cluster("Data & Storage", graph_attr={"bgcolor": "white", "style": "rounded"}):
                     s3_bucket = S3("S3 Bucket\nDocuments & Reports")
-                    cache_layer = Python("In-Memory Cache\nPandas DataFrames")
         
-        # Container Registry & CI/CD
-        with Cluster("Container Services", graph_attr={"bgcolor": "#FFF3E0", "style": "rounded"}):
+        # Container Registry
+        with Cluster("Container Services", graph_attr={"bgcolor": "white", "style": "rounded"}):
             ecr_repo = ECR("ECR Repository\npeer-bank-analytics")
-            codebuild = Codebuild("CodeBuild\nContainer Build")
         
         # Management & Security
-        with Cluster("Management & Security", graph_attr={"bgcolor": "#FFF8DC", "style": "rounded"}):
-            cloudwatch = Cloudwatch("CloudWatch\nLogs & Metrics")
-            iam = IAM("IAM Roles\n& Policies")
-            secrets = SecretsManager("Secrets Manager\nAPI Keys")
-            ssm = SystemsManager("Systems Manager\nParameter Store")
+        with Cluster("Management & Security", graph_attr={"bgcolor": "white", "style": "rounded", "rankdir": "LR", "ranksep": "0.1"}):
+            with Cluster("", graph_attr={"style": "invis", "rank": "same"}):
+                cloudwatch = Cloudwatch("CloudWatch\nLogs & Metrics")
+                iam = IAM("IAM Roles\n& Policies")
+                secrets = SecretsManager("Secrets Manager\nAPI Keys")
+                
+                # Force perfect horizontal alignment
+                cloudwatch - iam - secrets
     
     # Step 1: User Access
-    users >> Edge(label="1. HTTPS Request", color="#FF9900", style="bold") >> internet
-    admin_users >> Edge(label="Admin Access", color="#FF6B6B", style="dashed") >> internet
+    users >> Edge(label="1. HTTP Request", color="#FF9900", style="bold") >> igw >> alb
+    admin_users >> Edge(label="Admin Access", color="#FF6B6B", style="dashed") >> igw >> alb
     
-    # Step 2: Load Balancing
-    internet >> Edge(label="2. Route Traffic", color="#FF9900") >> igw >> alb
+    # Step 2: Container Orchestration
+    alb >> Edge(label="2. Forward Request", color="#4CAF50") >> ecs_cluster
+    ecs_cluster >> fargate_service
     
-    # Step 3: Container Orchestration
-    alb >> Edge(label="3. Forward Request", color="#4CAF50") >> ecs_cluster
-    ecs_cluster >> fargate_service >> container_app
+    # Step 3: External Data Integration
+    fargate_service >> Edge(label="3. Fetch Banking Data", color="#2196F3") >> fdic_api
+    fargate_service >> Edge(label="4. Retrieve Reports", color="#2196F3", labeldistance="0.1", labelangle="0") >> sec_api
     
-    # Step 4: External Data Integration
-    container_app >> Edge(label="4. Fetch Banking Data", color="#2196F3") >> fdic_api
-    container_app >> Edge(label="5. Retrieve Reports", color="#2196F3") >> sec_api
+    # Step 5: AI/ML Processing
+    fargate_service >> Edge(label="5. AI Analysis", color="#9C27B0") >> bedrock
+    fargate_service >> Edge(label="6. Vector Search", color="#9C27B0") >> vector_db
     
-    # Step 6: AI/ML Processing
-    container_app >> Edge(label="6. AI Analysis", color="#9C27B0") >> bedrock
-    container_app >> Edge(label="7. Vector Search", color="#9C27B0") >> vector_db
+    # Step 7: Data Management
+    fargate_service >> Edge(label="7. Document Storage", color="#FF5722") >> s3_bucket
     
-    # Step 8: Data Management
-    container_app >> Edge(label="8. Document Storage", color="#FF5722") >> s3_bucket
-    container_app >> Edge(label="9. Performance Cache", color="#FF5722") >> cache_layer
-    
-    # CI/CD Pipeline
-    codebuild >> Edge(label="Build & Push", color="#FF9800") >> ecr_repo
+    # Container Deployment
     ecr_repo >> Edge(label="Deploy Image", color="#FF9800") >> fargate_service
     
-    # Infrastructure Services
-    fargate_service >> Edge(label="Application Logs", color="#607D8B") >> cloudwatch
-    container_app >> Edge(label="Secure Credentials", color="#795548") >> secrets
-    fargate_service >> Edge(label="IAM Permissions", color="#795548") >> iam
-    container_app >> Edge(label="Configuration", color="#607D8B") >> ssm
+    # Infrastructure Services - single connection to cluster
+    fargate_service >> Edge(label="Logs, Credentials & Permissions", color="#607D8B") >> cloudwatch
