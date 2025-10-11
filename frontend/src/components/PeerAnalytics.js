@@ -47,13 +47,20 @@ function PeerAnalytics() {
     loadFDICData();
   }, []);
 
+  const [dataSource, setDataSource] = useState('');
+
   const loadFDICData = async () => {
     try {
       setLoading(true);
+      setError('🔄 Loading banking data... This may take 10-15 seconds for live FDIC data.');
       const data = await api.getFDICData();
       setFdicData(data);
+      setDataSource(data.data_source || 'Unknown');
+      setError(''); // Clear loading message
     } catch (err) {
-      setError('Failed to load FDIC data');
+      console.error('FDIC data loading failed:', err);
+      setError(`❌ Failed to load banking data: ${err.message || 'Network error'}`);
+      setDataSource('Error');
     } finally {
       setLoading(false);
     }
@@ -154,8 +161,10 @@ function PeerAnalytics() {
         setChartData([]);
       }
     } catch (err) {
-      setError('Analysis failed: ' + err.message);
       console.error('Analysis error:', err);
+      setError(`❌ Analysis failed: ${err.message || 'Unknown error'}`);
+      setAnalysis('');
+      setChartData([]);
     } finally {
       setLoading(false);
     }
@@ -214,9 +223,16 @@ function PeerAnalytics() {
   return (
     <Box>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
-        <Typography variant="h4" sx={{ fontWeight: 600 }}>
-          Peer Bank Analytics
-        </Typography>
+        <Box>
+          <Typography variant="h4" sx={{ fontWeight: 600 }}>
+            Peer Bank Analytics
+          </Typography>
+          {dataSource && (
+            <Typography variant="caption" sx={{ color: 'text.secondary', mt: 0.5, display: 'block' }}>
+              Data Source: {dataSource === 'FDIC API' ? '🟢 Live FDIC API' : '🟡 Mock Data (FDIC API unavailable)'}
+            </Typography>
+          )}
+        </Box>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, p: 1, border: '1px solid #ddd', borderRadius: 2, backgroundColor: '#f5f5f5' }}>
           <Button 
             variant={dataMode === 'live' ? 'contained' : 'text'} 

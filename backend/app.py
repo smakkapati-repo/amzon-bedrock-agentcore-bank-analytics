@@ -6,8 +6,10 @@ import json
 from rag_system import rag_system
 from sec_edgar_live import sec_api
 from bank_search import bank_search
+from fdic_api import get_real_fdic_data
 import PyPDF2
 import io
+from datetime import datetime, timedelta
 
 app = Flask(__name__, static_folder='static', static_url_path='')
 CORS(app)
@@ -15,6 +17,9 @@ CORS(app)
 # S3 client for PDF storage
 s3_client = boto3.client('s3')
 S3_BUCKET = 'bankiq-uploaded-docs'  # Will be created if doesn't exist
+
+# Cache for FDIC data
+fdic_cache = {'data': None, 'timestamp': None, 'ttl_minutes': 30}
 
 # Initialize RAG system on startup
 with app.app_context():
@@ -26,7 +31,27 @@ with app.app_context():
         print(f"RAG initialization failed: {e}")
 
 def get_banking_data():
-    """Generate banking data"""
+    """Get banking data from FDIC API with fallback to mock data"""
+    # Check cache first
+    if (fdic_cache['data'] is not None and 
+        fdic_cache['timestamp'] is not None and 
+        datetime.now() - fdic_cache['timestamp'] < timedelta(minutes=fdic_cache['ttl_minutes'])):
+        print("Using cached FDIC data")
+        return fdic_cache['data']
+    
+    try:
+        print("Fetching fresh FDIC data...")
+        data = get_real_fdic_data()
+        # Cache the data
+        fdic_cache['data'] = data
+        fdic_cache['timestamp'] = datetime.now()
+        return data
+    except Exception as e:
+        print(f"FDIC API failed, using mock data: {e}")
+        return get_mock_banking_data()
+
+def get_mock_banking_data():
+    """Fallback mock banking data"""
     banks = [
         "JPMORGAN CHASE BANK", "BANK OF AMERICA", "WELLS FARGO BANK", 
         "CITIBANK", "U.S. BANK", "PNC BANK", "GOLDMAN SACHS BANK",
@@ -89,7 +114,15 @@ def health_check():
 @app.route('/api/fdic-data')
 def get_fdic_data():
     try:
-        data = get_banking_data()
+        # Try real FDIC API first
+        data_source = "FDIC API"
+        try:
+            data = get_real_fdic_data()
+        except Exception as e:
+            print(f"FDIC API failed, using mock data: {e}")
+            data = get_mock_banking_data()
+            data_source = "Mock Data"
+        
         metrics_data = pd.DataFrame([
             {"Metric Name": "[Q] Return on Assets (ROA)", "Metric Description": "Net income as percentage of average assets"},
             {"Metric Name": "[Q] Return on Equity (ROE)", "Metric Description": "Net income as percentage of average equity"},
@@ -101,7 +134,9 @@ def get_fdic_data():
         
         return jsonify({
             'data': data.to_dict('records'),
-            'metrics': metrics_data.to_dict('records')
+            'metrics': metrics_data.to_dict('records'),
+            'data_source': data_source,
+            'total_records': len(data)
         })
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -1181,7 +1216,8 @@ Provide detailed analysis with specific numbers, percentages, and direct quotes 
                         full_report += chunk
                         yield f"data: {json.dumps({'chunk': chunk, 'progress': 90})}\n\n"
                 
-                yield f"data: {json.dumps({'status': 'Report complete!', 'progress': 100, 'complete': True, 'report': full_report, 'sources_used': len(all_docs)})}\n\n"
+                sources_count = len(all_docs) if mode != 'local' else len(analyzed_docs)
+                yield f"data: {json.dumps({'status': 'Report complete!', 'progress': 100, 'complete': True, 'report': full_report, 'sources_used': sources_count})}\n\n"
                 yield "data: [DONE]\n\n"  # Signal end of stream
                 
             except Exception as e:
