@@ -1,5 +1,7 @@
-# BankIQ+ - Advanced Banking Analytics Platform
+# BankIQ+ AgentCore - AI-Powered Banking Analytics Platform
 **Authors:** Shashi Makkapati, Senthil Kamala Rathinam, Jacob Scheatzle
+
+> **🤖 AgentCore Version**: This repository contains the AWS Bedrock AgentCore implementation with Strands tools for intelligent banking analytics.
 
 ## Background & Strategic Context
 
