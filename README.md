@@ -18,21 +18,25 @@ The AI can instantly correlate a bank's declining Net Interest Margin with indus
 **Key Components:**
 - **VPC with Public/Private Subnets**: Multi-AZ deployment for high availability
 - **Application Load Balancer**: IP-restricted access (your IP only)
-- **ECS Fargate**: Serverless containers in private subnets
-- **Amazon Bedrock**: Claude 3 Haiku/Sonnet for AI analysis
-- **Amazon Titan**: Embeddings V2 for RAG search
+- **ECS Fargate**: React UI containers in private subnets
+- **API Gateway**: RESTful API endpoints with CORS support
+- **Lambda Proxy**: Integration layer for AgentCore Runtime
+- **Bedrock AgentCore Runtime**: Strands agent with banking tools
+- **Claude Sonnet 4.5**: Latest AI model for financial analysis
 - **NAT Gateway**: Secure outbound internet access
+- **S3 Bucket**: Document uploads and storage
+- **ECR Repository**: Container image registry
 - **Security Groups**: Network-level security controls
 - **IAM Roles**: Minimal permissions for Bedrock access
 - **CloudWatch**: Comprehensive logging and monitoring
 
 ### Architecture Deep Dive
 
-The BankIQ+ platform follows a modern, cloud-native architecture built on AWS services with a clear separation of concerns and security-first design. The user journey begins when banking analysts and executives access the platform through their web browsers **(Step 1)**, with HTTP requests flowing directly to AWS's [Internet Gateway](https://docs.aws.amazon.com/vpc/latest/userguide/VPC_Internet_Gateway.html) and then to the [Application Load Balancer](https://docs.aws.amazon.com/elasticloadbalancing/latest/application/introduction.html). The load balancer serves as the entry point, intelligently routing traffic to the containerized application running on [Amazon ECS Fargate](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/AWS_Fargate.html) **(Step 2)**. This serverless container approach eliminates the need for EC2 instance management while providing automatic scaling based on demand. The core application consists of a React frontend and Flask API backend, packaged as a single container and deployed through [Amazon ECR](https://docs.aws.amazon.com/AmazonECR/latest/userguide/what-is-ecr.html) for container registry management.
+The BankIQ+ platform follows a modern, serverless architecture built on AWS services with clear separation of concerns and security-first design. The user journey begins when banking analysts and executives access the platform through their web browsers **(Step 1)**, with HTTPS requests flowing to AWS's [Internet Gateway](https://docs.aws.amazon.com/vpc/latest/userguide/VPC_Internet_Gateway.html) and then to the IP-restricted [Application Load Balancer](https://docs.aws.amazon.com/elasticloadbalancing/latest/application/introduction.html). The load balancer routes traffic to the React UI container running on [Amazon ECS Fargate](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/AWS_Fargate.html) in private subnets **(Step 2)**. This serverless container approach eliminates EC2 instance management while providing automatic scaling. The UI container serves the React frontend with nginx and communicates with backend services through [API Gateway](https://docs.aws.amazon.com/apigateway/latest/developerguide/welcome.html).
 
-The platform's intelligence comes from its sophisticated data integration and AI processing capabilities. The containerized application orchestrates multiple data streams, connecting to external data sources including FDIC APIs for real-time banking metrics and SEC EDGAR APIs for comprehensive financial reports **(Step 3)**. This external data is then processed through [Amazon Bedrock's](https://docs.aws.amazon.com/bedrock/latest/userguide/what-is-bedrock.html) Claude 3.5 Sonnet model **(Step 4)** for intelligent financial analysis, while a FAISS (Facebook AI Similarity Search) vector database **(Step 5)** enables rapid similarity searches across financial documents. The FAISS integration works alongside Amazon Bedrock's [Titan Embeddings V2](https://docs.aws.amazon.com/bedrock/latest/userguide/titan-embedding-models.html) model to convert financial documents into high-dimensional vectors, enabling the RAG (Retrieval-Augmented Generation) mode that provides instant access to relevant financial information before sending context to Claude for analysis. The architecture includes robust data management through [S3](https://docs.aws.amazon.com/s3/latest/userguide/Welcome.html) for document storage **(Step 6)**, with in-memory caching using Pandas DataFrames handled directly within the Fargate container to optimize performance and reduce API calls.
+The platform's intelligence comes from its sophisticated AgentCore Runtime integration. UI API calls flow to [API Gateway](https://docs.aws.amazon.com/apigateway/latest/developerguide/welcome.html) **(Step 3)**, which proxies requests through a [Lambda function](https://docs.aws.amazon.com/lambda/latest/dg/welcome.html) **(Step 4)** to the [Bedrock AgentCore Runtime](https://docs.aws.amazon.com/bedrock/latest/userguide/agents.html) **(Step 5)**. The AgentCore Runtime hosts a Strands agent with 11 specialized banking tools, powered by [Claude Sonnet 4.5](https://docs.aws.amazon.com/bedrock/latest/userguide/model-parameters-claude.html) **(Step 6)** for intelligent financial analysis. The agent directly integrates with external data sources including FDIC Call Reports for 2024-2025 banking metrics and SEC EDGAR APIs for real-time financial filings **(Steps 7-8)**. Document uploads are handled through [S3](https://docs.aws.amazon.com/s3/latest/userguide/Welcome.html) integration **(Step 9)**, enabling secure storage and analysis of financial documents.
 
-Security and operational excellence are embedded throughout the architecture via AWS's shared responsibility model. The Fargate containers run in [private subnets](https://docs.aws.amazon.com/vpc/latest/userguide/VPC_Subnets.html) with no direct internet access, communicating externally through a [NAT Gateway](https://docs.aws.amazon.com/vpc/latest/userguide/vpc-nat-gateway.html) for enhanced security isolation. [IAM roles and policies](https://docs.aws.amazon.com/IAM/latest/UserGuide/introduction.html) provide fine-grained access control, ensuring the Fargate containers have only the minimum permissions required for Bedrock AI services and external API access. [AWS Secrets Manager](https://docs.aws.amazon.com/secretsmanager/latest/userguide/intro.html) securely stores API keys and credentials, while [Systems Manager Parameter Store](https://docs.aws.amazon.com/systems-manager/latest/userguide/systems-manager-parameter-store.html) handles configuration management. [CloudWatch](https://docs.aws.amazon.com/cloudwatch/latest/monitoring/WhatIsCloudWatch.html) provides comprehensive logging and monitoring across all services, enabling proactive issue detection and performance optimization. The entire infrastructure is deployed through [CloudFormation](https://docs.aws.amazon.com/cloudformation/latest/userguide/Welcome.html) templates, ensuring consistent, repeatable deployments with built-in security groups that restrict access to specific IP addresses, creating a secure, enterprise-grade banking analytics platform that scales automatically while maintaining strict security controls.
+Security and operational excellence are embedded throughout the architecture via AWS's shared responsibility model. The UI containers run in [private subnets](https://docs.aws.amazon.com/vpc/latest/userguide/VPC_Subnets.html) with no direct internet access, communicating externally through a [NAT Gateway](https://docs.aws.amazon.com/vpc/latest/userguide/vpc-nat-gateway.html) for enhanced security isolation. [IAM roles and policies](https://docs.aws.amazon.com/IAM/latest/UserGuide/introduction.html) provide fine-grained access control with minimal permissions for Bedrock AgentCore access and S3 operations. The AgentCore Runtime operates as a managed service, eliminating the need for backend infrastructure management while providing enterprise-grade security and compliance. [CloudWatch](https://docs.aws.amazon.com/cloudwatch/latest/monitoring/WhatIsCloudWatch.html) provides comprehensive logging and monitoring across all services, with X-Ray tracing for AgentCore operations. The entire infrastructure is deployed through [CloudFormation](https://docs.aws.amazon.com/cloudformation/latest/userguide/Welcome.html) templates with a single interactive deployment script, ensuring consistent, repeatable deployments with built-in quota checks and security controls.
 
 ## 🎬 Demo
 
@@ -105,38 +109,31 @@ Security and operational excellence are embedded throughout the architecture via
 curl -s https://checkip.amazonaws.com
 ```
 
-**Deploy with CloudFormation:**
+**One-Command Deployment:**
 ```bash
-aws cloudformation create-stack \
-  --stack-name banking-analytics \
-  --template-body file://cloudformation-template.yaml \
-  --parameters ParameterKey=YourIPAddress,ParameterValue=YOUR_IP_HERE \
-  --capabilities CAPABILITY_IAM
+./bank-iq-plus-agentic.sh
 ```
 
-**Monitor Deployment:**
-```bash
-aws cloudformation describe-stacks \
-  --stack-name banking-analytics \
-  --query 'Stacks[0].StackStatus'
-```
-
-**Get Application URL:**
-```bash
-aws cloudformation describe-stacks \
-  --stack-name banking-analytics \
-  --query 'Stacks[0].Outputs[?OutputKey==`ApplicationURL`].OutputValue' \
-  --output text
-```
+**Interactive Deployment Features:**
+- **5-Phase Process**: Agent → Infrastructure → Container → Service → Complete
+- **Automatic Prerequisites**: Checks AWS CLI, Docker, quotas, and credentials
+- **Unique Agent Deployment**: Creates isolated AgentCore Runtime per user
+- **Real-time Progress**: Live CloudFormation status monitoring
+- **Quota Validation**: VPC, IGW, and S3 bucket availability checks
+- **Auto-Installation**: Strands CLI installed automatically if missing
 
 ### What Gets Deployed
 
-- **ECS Fargate Service**: Serverless container hosting
-- **Application Load Balancer**: High availability and SSL termination
-- **Security Groups**: IP-restricted access (your IP only)
-- **IAM Roles**: Minimal permissions for Bedrock access
-- **CloudWatch Logs**: Application monitoring and debugging
-- **Auto Scaling**: Handles traffic spikes automatically
+- **Bedrock AgentCore Runtime**: Strands agent with banking tools
+- **ECS Fargate Service**: React UI container in private subnets
+- **API Gateway + Lambda**: Proxy integration to AgentCore
+- **Application Load Balancer**: IP-restricted HTTPS access
+- **VPC with NAT Gateway**: Multi-AZ private/public subnet architecture
+- **S3 Bucket**: Secure document upload and storage
+- **ECR Repository**: Container image registry
+- **Security Groups**: Network-level access controls
+- **IAM Roles**: Minimal permissions for AgentCore and S3
+- **CloudWatch Logs**: Comprehensive monitoring and X-Ray tracing
 
 ### Post-Deployment Verification
 
@@ -154,17 +151,20 @@ aws cloudformation describe-stacks \
 
 3. **Check Logs (if issues):**
    - Go to CloudWatch → Log Groups
-   - Find `/ecs/bankiq-platform` log group
-   - Review recent logs for errors
+   - Find `/ecs/bankiq-ui` and `/aws/lambda/bankiq-api-proxy` log groups
+   - Review AgentCore Runtime logs in X-Ray traces
+   - Check deployment script output for detailed progress
 
 ## 🔧 Technology Stack
 
-- **Frontend**: React, Material-UI, Recharts
-- **Backend**: Flask, Python 3.11
-- **AI**: AWS Bedrock (Claude 3 Haiku/Sonnet)
-- **Search**: FAISS vector database
-- **APIs**: SEC EDGAR, FDIC
-- **Deployment**: AWS Fargate, CloudFormation, Application Load Balancer
+- **Frontend**: React, Material-UI, Recharts, Nginx
+- **Backend**: Bedrock AgentCore Runtime with Strands framework
+- **AI**: Claude Sonnet 4.5 (200K context window)
+- **Agent Tools**: 11 specialized banking tools (FDIC, SEC, chat, reports)
+- **APIs**: SEC EDGAR Live, FDIC Call Reports 2024-2025
+- **Integration**: API Gateway, Lambda Proxy, S3 Storage
+- **Deployment**: ECS Fargate, CloudFormation, Interactive Script
+- **Container**: Docker multi-stage builds, ECR registry
 
 
 
@@ -238,10 +238,11 @@ aws cloudformation describe-stacks \
 - Red events indicate issues (check IAM permissions)
 
 **After Deployment:**
-- Check AWS CloudWatch logs: `/ecs/bankiq-platform`
-- Review browser console for frontend issues
+- Check AWS CloudWatch logs: `/ecs/bankiq-ui` and Lambda logs
+- Review AgentCore Runtime traces in X-Ray console
 - Verify Security Group allows your current IP
 - Test with different browsers if needed
+- Validate AgentCore agent deployment in Bedrock console
 
 **Common Solutions:**
 - **Bedrock Access Denied**: Enable model access in Bedrock console
