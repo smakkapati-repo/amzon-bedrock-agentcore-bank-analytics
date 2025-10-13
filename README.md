@@ -13,7 +13,7 @@ The AI can instantly correlate a bank's declining Net Interest Margin with indus
 
 ## 🏗️ AWS Architecture
 
-![BankIQ+ AWS Architecture](arch/banking_peer_analytics_architecture.png)
+![BankIQ+ AWS Architecture](arch/bankiq_plus_agentcore_architecture.png)
 
 **Key Components:**
 - **VPC with Public/Private Subnets**: Multi-AZ deployment for high availability
