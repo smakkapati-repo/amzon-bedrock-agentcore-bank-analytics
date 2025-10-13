@@ -204,13 +204,18 @@ function PeerAnalytics() {
     (analysisType === 'Quarterly Metrics' ? uploadedMetrics.map(m => `[Q] ${m}`) : uploadedMetrics.map(m => `[M] ${m}`)) : 
     metrics;
 
-  // Sample data for demonstration
+  // Sample data for 2023-2025 period
   const sampleData = [
     { quarter: '2023-Q1', JPMorgan: 1.25, BofA: 1.18, Wells: 1.12, Citi: 1.08 },
     { quarter: '2023-Q2', JPMorgan: 1.28, BofA: 1.22, Wells: 1.15, Citi: 1.12 },
     { quarter: '2023-Q3', JPMorgan: 1.32, BofA: 1.25, Wells: 1.18, Citi: 1.15 },
     { quarter: '2023-Q4', JPMorgan: 1.35, BofA: 1.28, Wells: 1.21, Citi: 1.18 },
-    { quarter: '2024-Q1', JPMorgan: 1.38, BofA: 1.31, Wells: 1.24, Citi: 1.21 }
+    { quarter: '2024-Q1', JPMorgan: 1.38, BofA: 1.31, Wells: 1.24, Citi: 1.21 },
+    { quarter: '2024-Q2', JPMorgan: 1.41, BofA: 1.34, Wells: 1.27, Citi: 1.24 },
+    { quarter: '2024-Q3', JPMorgan: 1.44, BofA: 1.37, Wells: 1.30, Citi: 1.27 },
+    { quarter: '2024-Q4', JPMorgan: 1.47, BofA: 1.40, Wells: 1.33, Citi: 1.30 },
+    { quarter: '2025-Q1', JPMorgan: 1.50, BofA: 1.43, Wells: 1.36, Citi: 1.33 },
+    { quarter: '2025-Q2', JPMorgan: 1.53, BofA: 1.46, Wells: 1.39, Citi: 1.36 }
   ];
 
   const tableData = [
@@ -229,7 +234,7 @@ function PeerAnalytics() {
           </Typography>
           {dataSource && (
             <Typography variant="caption" sx={{ color: 'text.secondary', mt: 0.5, display: 'block' }}>
-              Data Source: {dataSource === 'FDIC API' ? '🟢 Live FDIC API' : '🟡 Mock Data (FDIC API unavailable)'}
+              Data Source: {dataSource.includes('FDIC Call Reports') ? '🟢 FDIC Call Reports (2023-2025)' : '🟡 Mock Data'}
             </Typography>
           )}
         </Box>

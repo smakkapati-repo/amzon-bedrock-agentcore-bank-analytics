@@ -1,8 +1,5 @@
-flask
-flask-cors
+strands-agents
+bedrock-agentcore
 boto3
-pandas
-faiss-cpu
-numpy
-PyPDF2
 requests
+sec-edgar-mcp

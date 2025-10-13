@@ -23,7 +23,7 @@ function FinancialReports() {
   const [fullReport, setFullReport] = useState('');
   const [reportLoading, setReportLoading] = useState(false);
   const [sources, setSources] = useState([]);
-  const [mode, setMode] = useState('rag'); // 'rag', 'live', or 'local'
+  const [mode, setMode] = useState('live'); // 'live' or 'local'
   const [uploadedFiles, setUploadedFiles] = useState([]);
   const [analyzedDocs, setAnalyzedDocs] = useState([]);
   const [searchBank, setSearchBank] = useState('');
@@ -179,7 +179,7 @@ function FinancialReports() {
       setSearchResults(results);
       
       if (results.length === 0) {
-        setError(`Sorry, I couldn't find "${searchBank}" in our supported banks database. Please try searching for major US banks like Goldman Sachs, Morgan Stanley, or Ally Financial.`);
+        setError(`Sorry, I couldn't find "${searchBank}" in our supported banks database. Please search for banking and financial institutions only (e.g., Goldman Sachs, Morgan Stanley, Ally Financial).`);
       }
     } catch (err) {
       setError('Failed to search banks');
@@ -223,25 +223,7 @@ function FinancialReports() {
           >
             Local
           </Button>
-          <Button 
-            variant={mode === 'rag' ? 'contained' : 'text'} 
-            size="small"
-            onClick={() => {
-              setMode('rag');
-              setSelectedBank('');
-              setChatHistory([]);
-              setFullReport('');
-              setReports({ '10-K': [], '10-Q': [] });
-              setUploadedFiles([]);
-              setAnalyzedDocs([]);
-              setError('');
-              setReportLoading(false);
-            }}
-            startIcon={<StorageIcon />}
-            sx={{ minWidth: 80, fontSize: '0.8rem' }}
-          >
-            RAG
-          </Button>
+
           <Button 
             variant={mode === 'live' ? 'contained' : 'text'} 
             size="small"
@@ -267,35 +249,10 @@ function FinancialReports() {
       {/* Bank Selection */}
       <Grid container spacing={4} sx={{ mb: 4 }}>
         <Grid item xs={12}>
-          {mode === 'rag' ? (
+          {mode === 'live' ? (
             <>
-              <Typography variant="h6" gutterBottom>
-                Select a Bank (RAG Mode - Pre-loaded Banks)
-              </Typography>
-              <Grid container spacing={2}>
-                {banks.map((bank) => (
-                  <Grid item key={bank}>
-                    <Button
-                      variant={selectedBank === bank ? 'contained' : 'outlined'}
-                      onClick={() => {
-                        setSelectedBank(bank);
-                        setChatHistory([]);
-                        setFullReport('');
-                        setReports({ '10-K': [], '10-Q': [] });
-                        setError('');
-                      }}
-                      sx={{ textTransform: 'none' }}
-                    >
-                      🏦 {bank.replace(' & Co', '').replace(' Corp', '').replace(' & Company', '')}
-                    </Button>
-                  </Grid>
-                ))}
-              </Grid>
-            </>
-          ) : mode === 'live' ? (
-            <>
-              <Typography variant="h6" gutterBottom>
-                🏦 Select Any Bank (Live EDGAR Mode - 29 Major Banks Available)
+              <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <CloudIcon /> Live EDGAR Mode - Real-time SEC Data (Banking Companies Only)
               </Typography>
               <Grid container spacing={2}>
                 {Object.entries({
@@ -349,7 +306,9 @@ function FinancialReports() {
             </>
           ) : (
             <>
-              <Typography variant="h6" gutterBottom>📄 Upload 10-K/10-Q PDF Files</Typography>
+              <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <DescriptionIcon /> Local Upload - Your Documents
+              </Typography>
               <input type="file" multiple accept=".pdf" onChange={(e) => {
                 const files = Array.from(e.target.files);
                 setUploadedFiles(files);
@@ -642,17 +601,27 @@ function FinancialReports() {
         </Card>
       )}
 
-      {!selectedBank && mode !== 'local' && (
+
+      
+      {!selectedBank && mode === 'live' && (
         <Paper sx={{ p: 4, textAlign: 'center', backgroundColor: '#f8f9fa' }}>
-          <Typography variant="h6" color="text.secondary">
-            👆 Please select a bank above to analyze their SEC filings
+          <Typography variant="h6" color="text.secondary" gutterBottom>
+            ☁️ Live EDGAR Mode - Banking Companies Only
+          </Typography>
+          <Typography variant="body1" color="text.secondary">
+            Select any of the 29 major banks above for real-time SEC filing analysis. Platform is designed for banking and financial institutions only.
           </Typography>
         </Paper>
       )}
       
       {mode === 'local' && uploadedFiles.length === 0 && (
         <Paper sx={{ p: 4, textAlign: 'center', backgroundColor: '#f8f9fa' }}>
-          <Typography variant="h6" color="text.secondary">📄 Please upload PDF files to analyze</Typography>
+          <Typography variant="h6" color="text.secondary" gutterBottom>
+            📄 Local Upload Mode - Your Documents
+          </Typography>
+          <Typography variant="body1" color="text.secondary">
+            Upload your own 10-K/10-Q PDF files for private analysis. Files are processed securely.
+          </Typography>
         </Paper>
       )}
     </Box>

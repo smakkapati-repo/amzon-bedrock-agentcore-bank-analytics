@@ -18,7 +18,7 @@ function Home() {
     {
       icon: <AssessmentIcon sx={{ fontSize: 48, color: 'primary.main' }} />,
       title: 'Financial Reports Analyzer',
-      description: 'Analyze SEC filings and financial reports with RAG-powered AI chat interface',
+      description: 'Analyze SEC filings and financial reports with live EDGAR API and document upload',
       status: 'SEC EDGAR API'
     },
     {
@@ -59,7 +59,7 @@ function Home() {
           </Typography>
           <Chip 
             icon={<CloudIcon />} 
-            label="Powered by Amazon Bedrock & Claude AI" 
+            label="Powered by AWS Bedrock AgentCore Runtime" 
             sx={{ 
               backgroundColor: 'rgba(255,255,255,0.2)', 
               color: 'white',
@@ -133,7 +133,7 @@ function Home() {
           Technology Stack
         </Typography>
         <Grid container spacing={2} justifyContent="center">
-          {['Amazon Bedrock', 'Claude AI', 'FDIC API', 'SEC EDGAR', 'React', 'Material-UI', 'Python', 'Flask'].map((tech) => (
+          {['AWS Bedrock AgentCore', 'Claude Sonnet 4.5', 'Strands Framework', 'FDIC API', 'SEC EDGAR', 'React', 'Material-UI', 'Amazon S3'].map((tech) => (
             <Grid item key={tech}>
               <Chip 
                 label={tech} 
