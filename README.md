@@ -54,15 +54,13 @@ Security and operational excellence are embedded throughout the architecture via
 - **AI Analysis**: AWS Bedrock Claude provides intelligent insights
 
 ### 📋 Financial Reports Analyzer
-- **RAG Mode**: Fast search through pre-loaded SEC filings
 - **Live EDGAR**: Real-time SEC.gov API integration
 - **Local Upload**: Analyze your own 10-K/10-Q PDF files
 - **AI Chat**: Interactive Q&A about financial reports
 
 ### 🔧 Analysis Modes
-1. **RAG Mode**: Pre-processed SEC filings for lightning-fast analysis
-2. **Live EDGAR**: Real-time SEC.gov API integration for 29+ major banks
-3. **Local Upload**: Upload your own financial documents (PDF/CSV)
+1. **Live EDGAR**: Real-time SEC.gov API integration for 28 major banks
+2. **Local Upload**: Upload your own financial documents (PDF/CSV)
 
 ## 🏦 Supported Banks & Metrics
 
@@ -203,7 +201,7 @@ curl -s https://checkip.amazonaws.com
 4. Or upload your own CSV data
 
 ### Financial Reports
-1. Choose analysis mode (RAG/Live/Local)
+1. Choose analysis mode (Live EDGAR/Local Upload)
 2. Select bank or upload documents
 3. Ask questions via AI chat
 4. Generate comprehensive reports
