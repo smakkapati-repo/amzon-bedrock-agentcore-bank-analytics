@@ -66,10 +66,12 @@ Security and operational excellence are embedded throughout the architecture via
 
 ## 🏦 Supported Banks & Metrics
 
-**29+ Major US Banks** including:
+**28 Major US Banks** including:
 - JPMorgan Chase, Bank of America, Wells Fargo, Citigroup
 - Goldman Sachs, Morgan Stanley, U.S. Bancorp, PNC Financial
-- Capital One, Truist Financial, and 19+ more regional banks
+- Capital One, Truist Financial, Ally Financial, American Express
+- Charles Schwab, Comerica, Discover Financial, Fifth Third Bancorp
+- And 14 more major banking institutions
 
 **Key Banking Metrics:**
 - **ROA** - Return on Assets: Net income as % of average assets
