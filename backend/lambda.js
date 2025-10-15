@@ -43,8 +43,7 @@ app.post('/api/invoke-agent', async (req, res) => {
   console.log(`[${new Date().toISOString()}] Invoking agent: ${inputText.substring(0, 100)}...`);
 
   try {
-    // Use existing AgentCore deployment (same as v1.0)
-    // AgentCore CLI is available in Lambda via Lambda Layer
+    // Use existing AgentCore deployment via CLI (Lambda Layer provides agentcore command)
     const { execSync } = require('child_process');
     
     const agentcoreCmd = sessionId 
