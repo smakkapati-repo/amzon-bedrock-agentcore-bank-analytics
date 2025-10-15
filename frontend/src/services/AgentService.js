@@ -3,7 +3,7 @@
  */
 class AgentService {
   constructor() {
-    this.baseURL = window.location.origin;
+    this.baseURL = process.env.REACT_APP_API_GATEWAY_URL || window.location.origin;
     this.websocket = null;
     this.eventSource = null;
     this.listeners = new Map();
@@ -53,6 +53,7 @@ class AgentService {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
+        request_type: 'chat',
         question,
         bankName,
         useRAG
@@ -124,6 +125,7 @@ class AgentService {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
+        request_type: 'peer_analysis',
         baseBank,
         peerBanks,
         metric

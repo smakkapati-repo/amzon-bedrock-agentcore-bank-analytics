@@ -1,13 +1,15 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
-import { Box, Tabs, Tab, AppBar, Toolbar, Typography, Container } from '@mui/material';
+import { Box, Tabs, Tab, AppBar, Toolbar, Typography, Container, IconButton } from '@mui/material';
 import CssBaseline from '@mui/material/CssBaseline';
 import AccountBalanceIcon from '@mui/icons-material/AccountBalance';
 import AnalyticsIcon from '@mui/icons-material/Analytics';
 import AssessmentIcon from '@mui/icons-material/Assessment';
+import LogoutIcon from '@mui/icons-material/Logout';
 import Home from './components/Home';
 import PeerAnalytics from './components/PeerAnalytics';
 import FinancialReports from './components/FinancialReports';
+import Login from './components/Login';
 
 const theme = createTheme({
   palette: {
@@ -52,10 +54,38 @@ function TabPanel({ children, value, index }) {
 
 function App() {
   const [tabValue, setTabValue] = useState(0);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+
+  useEffect(() => {
+    // Check if user is already logged in
+    const authStatus = localStorage.getItem('isAuthenticated');
+    if (authStatus === 'true') {
+      setIsAuthenticated(true);
+    }
+  }, []);
+
+  const handleLogin = () => {
+    setIsAuthenticated(true);
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('isAuthenticated');
+    setIsAuthenticated(false);
+    setTabValue(0);
+  };
 
   const handleTabChange = (event, newValue) => {
     setTabValue(newValue);
   };
+
+  if (!isAuthenticated) {
+    return (
+      <ThemeProvider theme={theme}>
+        <CssBaseline />
+        <Login onLogin={handleLogin} />
+      </ThemeProvider>
+    );
+  }
 
   return (
     <ThemeProvider theme={theme}>
@@ -67,12 +97,15 @@ function App() {
             <Typography variant="h4" component="div" sx={{ flexGrow: 1, fontWeight: 600 }}>
               BankIQ+
             </Typography>
+            <IconButton color="inherit" onClick={handleLogout} title="Logout">
+              <LogoutIcon />
+            </IconButton>
           </Toolbar>
           <Tabs 
             value={tabValue} 
             onChange={handleTabChange} 
             sx={{ 
-              backgroundColor: 'rgba(255,255,255,0.1)',
+              backgroundColor: '#1e3a8a',
               '& .MuiTab-root': { color: 'rgba(255,255,255,0.8)' },
               '& .Mui-selected': { color: 'white !important' },
               '& .MuiTabs-indicator': { backgroundColor: 'white' }

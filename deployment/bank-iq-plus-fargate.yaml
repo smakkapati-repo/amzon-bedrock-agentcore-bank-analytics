@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'BankIQ+ Complete Platform - UI + AgentCore Backend'
+Description: 'BankIQ+ Fargate Platform - Frontend + Backend Services'
 
 Parameters:
   YourIPAddress:
@@ -13,7 +13,7 @@ Parameters:
     Default: arn:aws:bedrock-agentcore:us-east-1:164543933824:runtime/banking_strands_agent-edyPskEp8w
 
 Resources:
-  # VPC and Networking
+  # VPC and Networking (Reused)
   VPC:
     Type: AWS::EC2::VPC
     Properties:
@@ -149,7 +149,7 @@ Resources:
       SubnetId: !Ref PrivateSubnet2
       RouteTableId: !Ref PrivateRouteTable
 
-  # Security Groups
+  # Security Groups (Modified)
   ALBSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
@@ -168,28 +168,41 @@ Resources:
         - Key: Name
           Value: BankIQ-ALB-SG
 
-  ECSSecurityGroup:
+  FrontendSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: Security group for ECS tasks
+      GroupDescription: Security group for Frontend ECS tasks
       VpcId: !Ref VPC
       SecurityGroupIngress:
         - IpProtocol: tcp
-          FromPort: 80
-          ToPort: 80
-          SourceSecurityGroupId: !Ref ALBSecurityGroup
-        - IpProtocol: tcp
-          FromPort: 8080
-          ToPort: 8080
+          FromPort: 3000
+          ToPort: 3000
           SourceSecurityGroupId: !Ref ALBSecurityGroup
       SecurityGroupEgress:
         - IpProtocol: -1
           CidrIp: 0.0.0.0/0
       Tags:
         - Key: Name
-          Value: BankIQ-ECS-SG
+          Value: BankIQ-Frontend-SG
 
-  # S3 Bucket for document uploads
+  BackendSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for Backend ECS tasks
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 8080
+          ToPort: 8080
+          SourceSecurityGroupId: !Ref FrontendSecurityGroup
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: BankIQ-Backend-SG
+
+  # S3 Bucket (Reused)
   DocumentsBucket:
     Type: AWS::S3::Bucket
     Properties:
@@ -202,15 +215,7 @@ Resources:
       VersioningConfiguration:
         Status: Enabled
 
-  # ECR Repositories
-  UIRepository:
-    Type: AWS::ECR::Repository
-    Properties:
-      RepositoryName: bankiq-ui
-      ImageScanningConfiguration:
-        ScanOnPush: true
-
-  # ECS Cluster
+  # ECS Cluster (Reused)
   ECSCluster:
     Type: AWS::ECS::Cluster
     Properties:
@@ -221,7 +226,7 @@ Resources:
         - CapacityProvider: FARGATE
           Weight: 1
 
-  # IAM Roles
+  # IAM Roles (Reused)
   TaskExecutionRole:
     Type: AWS::IAM::Role
     Properties:
@@ -261,24 +266,33 @@ Resources:
                   - s3:GetObject
                   - s3:PutObject
                   - s3:DeleteObject
-                Resource: !Sub '${DocumentsBucket}/*'
+                Resource: !Sub 'arn:aws:s3:::${DocumentsBucket}/*'
               - Effect: Allow
                 Action:
                   - s3:ListBucket
-                Resource: !Ref DocumentsBucket
+                Resource: !Sub 'arn:aws:s3:::${DocumentsBucket}'
 
   # CloudWatch Log Groups
-  UILogGroup:
+  FrontendLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: /ecs/bankiq-ui
+      LogGroupName: /ecs/bankiq-frontend
       RetentionInDays: 7
 
-  # UI Task Definition
-  UITaskDefinition:
+  BackendLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: /ecs/bankiq-backend
+      RetentionInDays: 7
+
+  # ECR Repositories (use existing ones created by script)
+  # Repositories are created by deployment script before CloudFormation
+
+  # Task Definitions
+  FrontendTaskDefinition:
     Type: AWS::ECS::TaskDefinition
     Properties:
-      Family: bankiq-ui-task
+      Family: bankiq-frontend-task
       NetworkMode: awsvpc
       RequiresCompatibilities:
         - FARGATE
@@ -287,23 +301,49 @@ Resources:
       ExecutionRoleArn: !Ref TaskExecutionRole
       TaskRoleArn: !Ref TaskRole
       ContainerDefinitions:
-        - Name: bankiq-ui
-          Image: !Sub '${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${UIRepository}:latest'
+        - Name: bankiq-frontend
+          Image: !Sub '${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/bankiq-frontend:latest'
           PortMappings:
-            - ContainerPort: 80
+            - ContainerPort: 3000
           Environment:
-            - Name: REACT_APP_AGENT_ARN
-              Value: !Ref AgentARNParameter
-            - Name: REACT_APP_S3_BUCKET
-              Value: !Ref DocumentsBucket
+            - Name: REACT_APP_PROXY_URL
+              Value: http://bankiq-backend-service:8080
           LogConfiguration:
             LogDriver: awslogs
             Options:
-              awslogs-group: !Ref UILogGroup
+              awslogs-group: !Ref FrontendLogGroup
               awslogs-region: !Ref AWS::Region
               awslogs-stream-prefix: ecs
 
-  # Application Load Balancer
+  BackendTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: bankiq-backend-task
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+        - FARGATE
+      Cpu: 256
+      Memory: 512
+      ExecutionRoleArn: !Ref TaskExecutionRole
+      TaskRoleArn: !Ref TaskRole
+      ContainerDefinitions:
+        - Name: bankiq-backend
+          Image: !Sub '${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/bankiq-backend:latest'
+          PortMappings:
+            - ContainerPort: 8080
+          Environment:
+            - Name: AGENT_ARN
+              Value: !Ref AgentARNParameter
+            - Name: AWS_DEFAULT_REGION
+              Value: !Ref AWS::Region
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref BackendLogGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: ecs
+
+  # Application Load Balancer (Reused)
   ApplicationLoadBalancer:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
@@ -320,11 +360,11 @@ Resources:
           Value: BankIQ-ALB
 
   # Target Groups
-  UITargetGroup:
+  FrontendTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
-      Name: bankiq-ui-targets
-      Port: 80
+      Name: bankiq-frontend-targets
+      Port: 3000
       Protocol: HTTP
       VpcId: !Ref VPC
       TargetType: ip
@@ -341,213 +381,82 @@ Resources:
     Properties:
       DefaultActions:
         - Type: forward
-          TargetGroupArn: !Ref UITargetGroup
+          TargetGroupArn: !Ref FrontendTargetGroup
       LoadBalancerArn: !Ref ApplicationLoadBalancer
       Port: 80
       Protocol: HTTP
 
+  # Service Discovery
+  ServiceDiscoveryNamespace:
+    Type: AWS::ServiceDiscovery::PrivateDnsNamespace
+    Properties:
+      Name: bankiq-platform-cluster.local
+      Vpc: !Ref VPC
+
+  BackendServiceDiscovery:
+    Type: AWS::ServiceDiscovery::Service
+    Properties:
+      Name: bankiq-backend-service
+      NamespaceId: !Ref ServiceDiscoveryNamespace
+      DnsConfig:
+        DnsRecords:
+          - Type: A
+            TTL: 60
+
   # ECS Services
-  UIService:
+  FrontendService:
     Type: AWS::ECS::Service
     DependsOn: ALBListener
     Properties:
-      ServiceName: bankiq-ui-service
+      ServiceName: bankiq-frontend-service
       Cluster: !Ref ECSCluster
-      TaskDefinition: !Ref UITaskDefinition
+      TaskDefinition: !Ref FrontendTaskDefinition
       LaunchType: FARGATE
       DesiredCount: 1
       NetworkConfiguration:
         AwsvpcConfiguration:
           SecurityGroups:
-            - !Ref ECSSecurityGroup
+            - !Ref FrontendSecurityGroup
           Subnets:
             - !Ref PrivateSubnet1
             - !Ref PrivateSubnet2
           AssignPublicIp: DISABLED
       LoadBalancers:
-        - ContainerName: bankiq-ui
-          ContainerPort: 80
-          TargetGroupArn: !Ref UITargetGroup
+        - ContainerName: bankiq-frontend
+          ContainerPort: 3000
+          TargetGroupArn: !Ref FrontendTargetGroup
 
-  # Lambda function for API Gateway integration with AgentCore
-  APILambdaRole:
-    Type: AWS::IAM::Role
+  BackendService:
+    Type: AWS::ECS::Service
     Properties:
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: lambda.amazonaws.com
-            Action: sts:AssumeRole
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
-      Policies:
-        - PolicyName: BedrockAgentCoreAccess
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - bedrock-agentcore:InvokeAgentRuntime
-                Resource: '*'
-
-  APILambdaFunction:
-    Type: AWS::Lambda::Function
-    Properties:
-      FunctionName: bankiq-api-proxy
-      Runtime: python3.11
-      Handler: index.lambda_handler
-      Role: !GetAtt APILambdaRole.Arn
-      Environment:
-        Variables:
-          AGENT_ARN: !Ref AgentARNParameter
-      Code:
-        ZipFile: |
-          import json
-          import boto3
-          import os
-          
-          def lambda_handler(event, context):
-              client = boto3.client('bedrock-agentcore')
-              agent_arn = os.environ['AGENT_ARN']
-              
-              # Parse request
-              path = event.get('path', '')
-              method = event.get('httpMethod', 'GET')
-              body = event.get('body', '{}')
-              
-              try:
-                  if method == 'POST':
-                      payload = json.loads(body) if body else {}
-                  else:
-                      payload = event.get('queryStringParameters', {}) or {}
-                  
-                  # Route to appropriate agent function
-                  if '/api/fdic-data' in path:
-                      payload['request_type'] = 'fdic_data'
-                  elif '/api/analyze-peers' in path:
-                      payload['request_type'] = 'peer_analysis'
-                  elif '/api/sec-reports' in path:
-                      payload['request_type'] = 'sec_filings'
-                  elif '/api/chat' in path:
-                      payload['request_type'] = 'chat'
-                  elif '/api/generate-report' in path:
-                      payload['request_type'] = 'report'
-                  elif '/api/search-banks' in path:
-                      payload['request_type'] = 'search_banks'
-                  
-                  # Invoke AgentCore
-                  response = client.invoke_agent_runtime(
-                      agentRuntimeArn=agent_arn,
-                      payload=json.dumps(payload)
-                  )
-                  
-                  result = json.loads(response['result'])
-                  
-                  return {
-                      'statusCode': 200,
-                      'headers': {
-                          'Content-Type': 'application/json',
-                          'Access-Control-Allow-Origin': '*',
-                          'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
-                          'Access-Control-Allow-Headers': 'Content-Type'
-                      },
-                      'body': json.dumps(result)
-                  }
-                  
-              except Exception as e:
-                  return {
-                      'statusCode': 500,
-                      'headers': {
-                          'Content-Type': 'application/json',
-                          'Access-Control-Allow-Origin': '*'
-                      },
-                      'body': json.dumps({'error': str(e)})
-                  }
-
-  # API Gateway
-  APIGateway:
-    Type: AWS::ApiGateway::RestApi
-    Properties:
-      Name: bankiq-api
-      Description: BankIQ+ API Gateway
-      EndpointConfiguration:
-        Types:
-          - REGIONAL
-
-  APIGatewayResource:
-    Type: AWS::ApiGateway::Resource
-    Properties:
-      RestApiId: !Ref APIGateway
-      ParentId: !GetAtt APIGateway.RootResourceId
-      PathPart: '{proxy+}'
-
-  APIGatewayMethod:
-    Type: AWS::ApiGateway::Method
-    Properties:
-      RestApiId: !Ref APIGateway
-      ResourceId: !Ref APIGatewayResource
-      HttpMethod: ANY
-      AuthorizationType: NONE
-      Integration:
-        Type: AWS_PROXY
-        IntegrationHttpMethod: POST
-        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${APILambdaFunction.Arn}/invocations'
-
-  APIGatewayOptionsMethod:
-    Type: AWS::ApiGateway::Method
-    Properties:
-      RestApiId: !Ref APIGateway
-      ResourceId: !Ref APIGatewayResource
-      HttpMethod: OPTIONS
-      AuthorizationType: NONE
-      Integration:
-        Type: MOCK
-        IntegrationResponses:
-          - StatusCode: 200
-            ResponseParameters:
-              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
-              method.response.header.Access-Control-Allow-Methods: "'GET,POST,OPTIONS'"
-              method.response.header.Access-Control-Allow-Origin: "'*'"
-        RequestTemplates:
-          application/json: '{"statusCode": 200}'
-      MethodResponses:
-        - StatusCode: 200
-          ResponseParameters:
-            method.response.header.Access-Control-Allow-Headers: true
-            method.response.header.Access-Control-Allow-Methods: true
-            method.response.header.Access-Control-Allow-Origin: true
-
-  APIGatewayDeployment:
-    Type: AWS::ApiGateway::Deployment
-    DependsOn:
-      - APIGatewayMethod
-      - APIGatewayOptionsMethod
-    Properties:
-      RestApiId: !Ref APIGateway
-      StageName: prod
-
-  LambdaInvokePermission:
-    Type: AWS::Lambda::Permission
-    Properties:
-      FunctionName: !Ref APILambdaFunction
-      Action: lambda:InvokeFunction
-      Principal: apigateway.amazonaws.com
-      SourceArn: !Sub '${APIGateway}/*/ANY/*'
+      ServiceName: bankiq-backend-service
+      Cluster: !Ref ECSCluster
+      TaskDefinition: !Ref BackendTaskDefinition
+      LaunchType: FARGATE
+      DesiredCount: 1
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          SecurityGroups:
+            - !Ref BackendSecurityGroup
+          Subnets:
+            - !Ref PrivateSubnet1
+            - !Ref PrivateSubnet2
+          AssignPublicIp: DISABLED
+      ServiceRegistries:
+        - RegistryArn: !GetAtt BackendServiceDiscovery.Arn
 
 Outputs:
   ApplicationURL:
     Description: URL of the BankIQ+ Platform
     Value: !Sub 'http://${ApplicationLoadBalancer.DNSName}'
     
-  APIGatewayURL:
-    Description: API Gateway URL
-    Value: !Sub 'https://${APIGateway}.execute-api.${AWS::Region}.amazonaws.com/prod'
+  FrontendRepository:
+    Description: ECR Repository for Frontend
+    Value: !Sub '${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/bankiq-frontend'
     
-  UIECRRepository:
-    Description: UI ECR Repository URI
-    Value: !Sub '${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${UIRepository}'
+  BackendRepository:
+    Description: ECR Repository for Backend
+    Value: !Sub '${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/bankiq-backend'
     
   S3Bucket:
     Description: S3 Bucket for document uploads

@@ -2,15 +2,15 @@ import React, { useState, useEffect } from 'react';
 import { 
   Box, Typography, Card, CardContent, Grid, Button,
   TextField, Paper, Chip, List, ListItem, ListItemText,
-  CircularProgress, Alert, Switch, FormControlLabel, Autocomplete
+  CircularProgress, Alert, Divider
 } from '@mui/material';
 import ChatIcon from '@mui/icons-material/Chat';
 import DescriptionIcon from '@mui/icons-material/Description';
 import DownloadIcon from '@mui/icons-material/Download';
 import CloudIcon from '@mui/icons-material/Cloud';
-import StorageIcon from '@mui/icons-material/Storage';
 import SearchIcon from '@mui/icons-material/Search';
 import { api } from '../services/api';
+import ReactMarkdown from 'react-markdown';
 
 function FinancialReports() {
   const [selectedBank, setSelectedBank] = useState('');
@@ -19,10 +19,10 @@ function FinancialReports() {
   const [reports, setReports] = useState({ '10-K': [], '10-Q': [] });
   const [loading, setLoading] = useState(false);
   const [chatLoading, setChatLoading] = useState(false);
+  // eslint-disable-next-line no-unused-vars
   const [error, setError] = useState('');
   const [fullReport, setFullReport] = useState('');
   const [reportLoading, setReportLoading] = useState(false);
-  const [sources, setSources] = useState([]);
   const [mode, setMode] = useState('live'); // 'live' or 'local'
   const [uploadedFiles, setUploadedFiles] = useState([]);
   const [analyzedDocs, setAnalyzedDocs] = useState([]);
@@ -31,17 +31,25 @@ function FinancialReports() {
   const [searching, setSearching] = useState(false);
   const [selectedBankCik, setSelectedBankCik] = useState(null);
 
-  const banks = [
-    'JPMORGAN CHASE & CO', 'BANK OF AMERICA CORP', 'WELLS FARGO & COMPANY', 
-    'CITIGROUP INC', 'U.S. BANCORP', 'PNC FINANCIAL SERVICES',
-    'TRUIST FINANCIAL CORP', 'CAPITAL ONE FINANCIAL', 'REGIONS FINANCIAL CORP', 'FIFTH THIRD BANCORP'
-  ];
+  const popularBanks = {
+    "JPMORGAN CHASE & CO": "0000019617",
+    "BANK OF AMERICA CORP": "0000070858",
+    "WELLS FARGO & COMPANY": "0000072971",
+    "CITIGROUP INC": "0000831001",
+    "GOLDMAN SACHS GROUP INC": "0000886982",
+    "MORGAN STANLEY": "0000895421",
+    "U.S. BANCORP": "0000036104",
+    "PNC FINANCIAL SERVICES GROUP INC": "0000713676",
+    "CAPITAL ONE FINANCIAL CORP": "0000927628",
+    "TRUIST FINANCIAL CORP": "0001534701"
+  };
 
   useEffect(() => {
     if (selectedBank && mode !== 'local') {
       loadReports();
     }
-  }, [selectedBank, mode]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedBank, selectedBankCik, mode]);
 
   const loadReports = async () => {
     try {
@@ -79,7 +87,7 @@ function FinancialReports() {
         uploadedFiles.forEach(file => {
           formData.append('files', file);
         });
-        response = await api.chatWithLocalFiles(formData);
+        response = await api.chatWithLocalFiles(formData, analyzedDocs);
       } else {
         response = await api.chatWithAI(messageToSend, selectedBank, reports, mode === 'rag', selectedBankCik);
       }
@@ -87,7 +95,12 @@ function FinancialReports() {
         const newHistory = [...prev];
         const lastIndex = newHistory.length - 1;
         if (newHistory[lastIndex] && newHistory[lastIndex].role === 'assistant') {
-          newHistory[lastIndex].content = response.response;
+          // Remove DATA: line from chat display (it's for parsing only)
+          let cleanContent = response.response;
+          if (cleanContent.includes('DATA:')) {
+            cleanContent = cleanContent.replace(/DATA:\s*\{[\s\S]*?\}\s*\n+/g, '').trim();
+          }
+          newHistory[lastIndex].content = cleanContent;
           newHistory[lastIndex].sources = response.sources || [];
         }
         return newHistory;
@@ -108,58 +121,41 @@ function FinancialReports() {
       setFullReport('');
       setError('');
       
-      const response = await fetch('/api/generate-report', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ bankName: selectedBank, reports, useRAG: mode === 'rag', mode: mode, analyzedDocs: analyzedDocs })
-      });
-      
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
+      let report;
+      if (mode === 'local' && analyzedDocs.length > 0) {
+        // For local mode, use the uploaded PDF from S3
+        const doc = analyzedDocs[0];
         
-        const chunk = decoder.decode(value);
-        const lines = chunk.split('\n');
-        
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            const dataContent = line.slice(6).trim();
-            
-            // Check for end of stream signal
-            if (dataContent === '[DONE]') {
-              setReportLoading(false);
-              return;
-            }
-            
-            try {
-              const data = JSON.parse(dataContent);
-              
-              if (data.chunk) {
-                setFullReport(prev => prev + data.chunk);
-              }
-              
-              if (data.complete) {
-                setFullReport(data.report);
-                setReportLoading(false);
-                return;
-              }
-              
-              if (data.error) {
-                setError(data.error);
-                setReportLoading(false);
-                return;
-              }
-            } catch (e) {
-              // Skip invalid JSON
-            }
-          }
+        if (doc.s3_key) {
+          // Document is in S3, agent can analyze it
+          report = await api.generateFullReport(
+            `Use the analyze_uploaded_pdf tool to generate a comprehensive financial analysis report. ` +
+            `S3 key: ${doc.s3_key}, Bank: ${doc.bank_name}, Analysis type: comprehensive`,
+            reports
+          );
+        } else {
+          // Fallback if S3 upload failed
+          report = await api.generateFullReport(
+            `Generate a comprehensive financial analysis report for ${selectedBank} based on their ${doc.form_type} filing for fiscal year ${doc.year}. ` +
+            `Use publicly available data and SEC filings.`,
+            reports
+          );
         }
+      } else {
+        report = await api.generateFullReport(selectedBank, reports);
       }
+      
+      // Remove DATA: line from report display (it's for parsing only)
+      let cleanReport = report;
+      if (cleanReport.includes('DATA:')) {
+        cleanReport = cleanReport.replace(/DATA:\s*\{[\s\S]*?\}\s*\n+/g, '').trim();
+      }
+      
+      setFullReport(cleanReport);
+      
     } catch (err) {
       setError('Failed to generate full report');
+    } finally {
       setReportLoading(false);
     }
   };
@@ -254,37 +250,59 @@ function FinancialReports() {
               <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                 <CloudIcon /> Live EDGAR Mode - Real-time SEC Data (Banking Companies Only)
               </Typography>
+              
+              {/* Bank Search */}
+              <Box sx={{ display: 'flex', gap: 1, mb: 3, alignItems: 'center' }}>
+                <TextField
+                  placeholder="Search for any bank or financial institution..."
+                  value={searchBank}
+                  onChange={(e) => setSearchBank(e.target.value)}
+                  onKeyPress={(e) => e.key === 'Enter' && handleBankSearch()}
+                  size="small"
+                  sx={{ minWidth: 300 }}
+                />
+                <Button 
+                  variant="contained" 
+                  onClick={handleBankSearch}
+                  disabled={!searchBank.trim() || searching}
+                  startIcon={searching ? <CircularProgress size={16} /> : <SearchIcon />}
+                >
+                  {searching ? 'Searching...' : 'Search'}
+                </Button>
+              </Box>
+              
+              {/* Search Results */}
+              {searchResults.length > 0 && (
+                <Box sx={{ mb: 3 }}>
+                  <Typography variant="body2" sx={{ mb: 1, fontWeight: 600 }}>Search Results:</Typography>
+                  <Grid container spacing={1}>
+                    {searchResults.map((result, index) => (
+                      <Grid item key={index}>
+                        <Button
+                          variant="outlined"
+                          onClick={() => {
+                            setSelectedBank(result.name);
+                            setSelectedBankCik(result.cik);
+                            setChatHistory([]);
+                            setFullReport('');
+                            setReports({ '10-K': [], '10-Q': [] });
+                            setError('');
+                            setSearchResults([]);
+                            setSearchBank('');
+                          }}
+                          sx={{ textTransform: 'none', fontSize: '0.8rem' }}
+                        >
+                          🏦 {result.name}
+                        </Button>
+                      </Grid>
+                    ))}
+                  </Grid>
+                </Box>
+              )}
+              
+              <Typography variant="body2" sx={{ mb: 2, fontWeight: 600 }}>Or select from 10 popular banks:</Typography>
               <Grid container spacing={2}>
-                {Object.entries({
-                  "ALLY FINANCIAL INC": "0001479094",
-                  "AMERICAN EXPRESS COMPANY": "0000004962",
-                  "BANK OF NEW YORK MELLON CORP": "0001390777",
-                  "BB&T CORPORATION": "0000092230",
-                  "CHARLES SCHWAB CORPORATION": "0000316709",
-                  "COMERICA INCORPORATED": "0000028412",
-                  "DISCOVER FINANCIAL SERVICES": "0001393612",
-                  "FIFTH THIRD BANCORP": "0000035527",
-                  "FIRST REPUBLIC BANK": "0001132979",
-                  "GOLDMAN SACHS GROUP INC": "0000886982",
-                  "HUNTINGTON BANCSHARES INC": "0000049196",
-                  "JPMORGAN CHASE & CO": "0000019617",
-                  "KEYCORP": "0000091576",
-                  "M&T BANK CORP": "0000036405",
-                  "MORGAN STANLEY": "0000895421",
-                  "NORTHERN TRUST CORP": "0000073124",
-                  "PNC FINANCIAL SERVICES GROUP INC": "0000713676",
-                  "REGIONS FINANCIAL CORP": "0001281761",
-                  "STATE STREET CORP": "0000093751",
-                  "SUNTRUST BANKS INC": "0000750556",
-                  "SYNCHRONY FINANCIAL": "0001601712",
-                  "TRUIST FINANCIAL CORP": "0001534701",
-                  "U.S. BANCORP": "0000036104",
-                  "WELLS FARGO & COMPANY": "0000072971",
-                  "ZIONS BANCORPORATION": "0000109380",
-                  "BANK OF AMERICA CORP": "0000070858",
-                  "CITIGROUP INC": "0000831001",
-                  "CAPITAL ONE FINANCIAL CORP": "0000927628"
-                }).map(([bankName, cik]) => (
+                {Object.entries(popularBanks).map(([bankName, cik]) => (
                   <Grid item key={bankName}>
                     <Button
                       variant={selectedBank === bankName ? 'contained' : 'outlined'}
@@ -322,19 +340,45 @@ function FinancialReports() {
                   <Button 
                     variant="contained" 
                     onClick={async () => {
-                      const formData = new FormData();
-                      uploadedFiles.forEach(file => formData.append('files', file));
-                      
                       try {
                         setLoading(true);
-                        const response = await fetch('/api/analyze-pdfs', {
-                          method: 'POST',
-                          body: formData
+                        setError('');
+                        
+                        // Convert files to base64 for upload
+                        const filePromises = uploadedFiles.map(file => {
+                          return new Promise((resolve) => {
+                            const reader = new FileReader();
+                            reader.onload = (e) => {
+                              resolve({
+                                name: file.name,
+                                size: file.size,
+                                content: e.target.result.split(',')[1] // Get base64 part
+                              });
+                            };
+                            reader.readAsDataURL(file);
+                          });
                         });
-                        const result = await response.json();
-                        setAnalyzedDocs(result.documents);
+                        
+                        const filesData = await Promise.all(filePromises);
+                        
+                        // Upload to backend
+                        const response = await api.uploadPDFs(filesData);
+                        
+                        if (response.success && response.documents) {
+                          setAnalyzedDocs(response.documents);
+                          setChatHistory([]);
+                          setFullReport('');
+                          
+                          // Auto-select first bank
+                          if (response.documents.length > 0) {
+                            setSelectedBank(response.documents[0].bank_name);
+                          }
+                        } else {
+                          setError('Failed to analyze PDFs');
+                        }
                       } catch (err) {
-                        setError('PDF analysis failed');
+                        console.error('PDF upload error:', err);
+                        setError('PDF upload failed: ' + err.message);
                       } finally {
                         setLoading(false);
                       }
@@ -408,7 +452,7 @@ function FinancialReports() {
                   </List>
                 ) : (
                   <List>
-                    {[...reports['10-K'], ...reports['10-Q']].map((report, index) => (
+                    {[...(reports['10-K'] || []), ...(reports['10-Q'] || [])].map((report, index) => (
                       <ListItem key={index} sx={{ border: '1px solid #e0e0e0', borderRadius: 1, mb: 1 }}>
                         <ListItemText
                           primary={
@@ -469,9 +513,19 @@ function FinancialReports() {
                         >
                           {message.role === 'user' ? 'You:' : 'AI:'}
                         </Typography>
-                        <Typography variant="body1" sx={{ whiteSpace: 'pre-wrap', mb: 1 }}>
-                          {message.content}
-                        </Typography>
+                        <Box sx={{ 
+                          mb: 1,
+                          '& h1, & h2, & h3': { mt: 1.5, mb: 1, fontWeight: 600 },
+                          '& h2': { fontSize: '1.25rem', color: '#A020F0' },
+                          '& h3': { fontSize: '1.1rem', color: '#8B1A9B' },
+                          '& p': { mb: 1, lineHeight: 1.6 },
+                          '& ul, & ol': { pl: 2.5, mb: 1 },
+                          '& li': { mb: 0.3 },
+                          '& strong': { fontWeight: 600, color: '#A020F0' },
+                          '& code': { backgroundColor: '#f5f5f5', padding: '2px 4px', borderRadius: '3px', fontSize: '0.9em' }
+                        }}>
+                          <ReactMarkdown>{message.content}</ReactMarkdown>
+                        </Box>
                         {message.sources && message.sources.length > 0 && (
                           <Box sx={{ mt: 1 }}>
                             <Typography variant="caption" sx={{ fontWeight: 600, color: 'text.secondary' }}>
@@ -585,17 +639,20 @@ function FinancialReports() {
                 border: '1px solid #e0e0e0'
               }}
             >
-              <Typography 
-                variant="body1" 
-                sx={{ 
-                  whiteSpace: 'pre-wrap',
-                  fontFamily: 'monospace',
-                  fontSize: '0.9rem',
-                  lineHeight: 1.6
-                }}
-              >
-                {fullReport}
-              </Typography>
+              <Box sx={{ 
+                '& h1, & h2, & h3': { mt: 2, mb: 1.5, fontWeight: 600 },
+                '& h1': { fontSize: '1.75rem', color: '#A020F0', borderBottom: '2px solid #A020F0', pb: 1 },
+                '& h2': { fontSize: '1.5rem', color: '#A020F0' },
+                '& h3': { fontSize: '1.25rem', color: '#8B1A9B' },
+                '& p': { mb: 2, lineHeight: 1.8, fontSize: '1rem' },
+                '& ul, & ol': { pl: 3, mb: 2 },
+                '& li': { mb: 0.75, lineHeight: 1.7 },
+                '& strong': { fontWeight: 600, color: '#A020F0' },
+                '& em': { fontStyle: 'italic', color: '#666' },
+                '& blockquote': { borderLeft: '4px solid #A020F0', pl: 2, ml: 0, fontStyle: 'italic', color: '#666' }
+              }}>
+                <ReactMarkdown>{fullReport}</ReactMarkdown>
+              </Box>
             </Paper>
           </CardContent>
         </Card>
@@ -609,7 +666,7 @@ function FinancialReports() {
             ☁️ Live EDGAR Mode - Banking Companies Only
           </Typography>
           <Typography variant="body1" color="text.secondary">
-            Select any of the 29 major banks above for real-time SEC filing analysis. Platform is designed for banking and financial institutions only.
+            Search for any publicly traded bank or select from the 10 popular banks above. Platform supports all banking and financial institutions with SEC filings.
           </Typography>
         </Paper>
       )}

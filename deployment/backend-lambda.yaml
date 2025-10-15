@@ -1,0 +1,162 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'BankIQ+ Backend - Lambda + API Gateway'
+
+Resources:
+  # Lambda Execution Role
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: BankIQBackendLambdaRole
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: BedrockAgentCoreAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - bedrock-agentcore:InvokeAgent
+                  - bedrock-agentcore:InvokeAgentWithResponseStream
+                Resource: '*'
+
+  # Lambda Function
+  BackendFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: bankiq-backend
+      Runtime: python3.12
+      Handler: index.handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 120
+      MemorySize: 512
+      Environment:
+        Variables:
+          AGENT_ARN: arn:aws:bedrock-agentcore:us-east-1:164543933824:runtime/bank_iq_agent_v1-8r28UWE5Z8
+      Code:
+        ZipFile: |
+          import json
+          import boto3
+          import os
+          import uuid
+          
+          bedrock_agentcore = boto3.client('bedrock-agentcore-runtime')
+          
+          def handler(event, context):
+              try:
+                  # Parse request
+                  body = json.loads(event.get('body', '{}'))
+                  input_text = body.get('inputText', '')
+                  session_id = body.get('sessionId', str(uuid.uuid4()))
+                  
+                  if not input_text:
+                      return {
+                          'statusCode': 400,
+                          'headers': {
+                              'Content-Type': 'application/json',
+                              'Access-Control-Allow-Origin': '*'
+                          },
+                          'body': json.dumps({'error': 'Missing inputText'})
+                      }
+                  
+                  # Invoke AgentCore
+                  agent_arn = os.environ['AGENT_ARN']
+                  response = bedrock_agentcore.invoke_agent(
+                      agentAliasId='DEFAULT',
+                      agentId=agent_arn.split('/')[-1].split('-')[0],
+                      sessionId=session_id,
+                      inputText=input_text
+                  )
+                  
+                  # Parse response
+                  output_text = ''
+                  for event in response['completion']:
+                      if 'chunk' in event:
+                          chunk = event['chunk']
+                          if 'bytes' in chunk:
+                              output_text += chunk['bytes'].decode('utf-8')
+                  
+                  return {
+                      'statusCode': 200,
+                      'headers': {
+                          'Content-Type': 'application/json',
+                          'Access-Control-Allow-Origin': '*'
+                      },
+                      'body': json.dumps({
+                          'output': output_text,
+                          'sessionId': session_id,
+                          'runtime': 'AgentCore-Lambda'
+                      })
+                  }
+              except Exception as e:
+                  return {
+                      'statusCode': 500,
+                      'headers': {
+                          'Content-Type': 'application/json',
+                          'Access-Control-Allow-Origin': '*'
+                      },
+                      'body': json.dumps({'error': str(e)})
+                  }
+
+  # API Gateway
+  ApiGateway:
+    Type: AWS::ApiGatewayV2::Api
+    Properties:
+      Name: bankiq-backend-api
+      ProtocolType: HTTP
+      CorsConfiguration:
+        AllowOrigins:
+          - '*'
+        AllowMethods:
+          - POST
+          - OPTIONS
+        AllowHeaders:
+          - Content-Type
+
+  # API Gateway Integration
+  ApiIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref ApiGateway
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !GetAtt BackendFunction.Arn
+      PayloadFormatVersion: '2.0'
+
+  # API Gateway Route
+  ApiRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref ApiGateway
+      RouteKey: 'POST /api/invoke-agent'
+      Target: !Sub 'integrations/${ApiIntegration}'
+
+  # API Gateway Stage
+  ApiStage:
+    Type: AWS::ApiGatewayV2::Stage
+    Properties:
+      ApiId: !Ref ApiGateway
+      StageName: prod
+      AutoDeploy: true
+
+  # Lambda Permission
+  LambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref BackendFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*'
+
+Outputs:
+  ApiEndpoint:
+    Description: API Gateway Endpoint
+    Value: !Sub 'https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/prod'
+    Export:
+      Name: BankIQ-Backend-API-Endpoint

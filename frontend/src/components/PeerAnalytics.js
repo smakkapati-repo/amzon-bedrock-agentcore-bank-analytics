@@ -3,10 +3,11 @@ import {
   Box, Typography, Card, CardContent, Grid, 
   FormControl, InputLabel, Select, MenuItem, Button,
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper,
-  CircularProgress, Alert
+  CircularProgress, Alert, Divider
 } from '@mui/material';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { api } from '../services/api';
+import ReactMarkdown from 'react-markdown';
 
 function PeerAnalytics() {
   const [selectedBank, setSelectedBank] = useState('');
@@ -53,9 +54,14 @@ function PeerAnalytics() {
     try {
       setLoading(true);
       setError('🔄 Loading banking data... This may take 10-15 seconds for live FDIC data.');
-      const data = await api.getFDICData();
-      setFdicData(data);
-      setDataSource(data.data_source || 'Unknown');
+      const response = await api.getFDICData();
+      console.log('API Response:', response);
+      if (response.success) {
+        setFdicData(response.result);
+        setDataSource(response.result.data_source || 'FDIC Call Reports');
+      } else {
+        throw new Error('API returned success: false');
+      }
       setError(''); // Clear loading message
     } catch (err) {
       console.error('FDIC data loading failed:', err);
@@ -145,7 +151,8 @@ function PeerAnalytics() {
           result = { data: longFormatData, analysis: `Analysis based on uploaded data for ${selectedMetric}` };
         }
       } else {
-        result = await api.analyzePeers(apiBaseBank, apiPeerBanks, selectedMetric);
+        const response = await api.analyzePeers(apiBaseBank, apiPeerBanks, selectedMetric);
+        result = response.success ? response.result : response;
       }
       setAnalysis(result.analysis);
       
@@ -435,8 +442,7 @@ function PeerAnalytics() {
                 setSelectedMetric(''); // Reset metric when type changes
               }}
             >
-              {(dataMode === 'live' || hasQuarterly) && <MenuItem value="Quarterly Metrics">Quarterly</MenuItem>}
-              {(dataMode === 'live' || hasMonthly) && <MenuItem value="Monthly View">Monthly</MenuItem>}
+              <MenuItem value="Quarterly Metrics">Quarterly</MenuItem>
             </Select>
           </FormControl>
         </Grid>
@@ -446,7 +452,12 @@ function PeerAnalytics() {
             <Select
               value={selectedMetric}
               label="Metric"
-              onChange={(e) => setSelectedMetric(e.target.value)}
+              onChange={(e) => {
+                setSelectedMetric(e.target.value);
+                setAnalysis('');
+                setChartData([]);
+                setError('');
+              }}
             >
               {availableMetrics.map((metric) => (
                 <MenuItem key={metric} value={metric}>{metric.replace('[Q] ', '').replace('[M] ', '')}</MenuItem>
@@ -491,12 +502,25 @@ function PeerAnalytics() {
       {analysis && (
         <Card sx={{ mb: 4 }}>
           <CardContent>
-            <Typography variant="h6" gutterBottom>
-              🤖 {analysisType === 'Quarterly Metrics' ? 'Quarterly' : 'Monthly'} AI Analysis
+            <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
+              🤖 AI Analysis - {selectedMetric.replace('[Q] ', '').replace('[M] ', '')}
             </Typography>
-            <Typography variant="body1" sx={{ whiteSpace: 'pre-wrap' }}>
-              {analysis}
-            </Typography>
+            <Divider sx={{ mb: 2 }} />
+            <Box sx={{ 
+              '& h1, & h2, & h3': { mt: 2, mb: 1, fontWeight: 600 },
+              '& h2': { fontSize: '1.5rem', color: '#A020F0' },
+              '& h3': { fontSize: '1.25rem', color: '#8B1A9B' },
+              '& p': { mb: 1.5, lineHeight: 1.7 },
+              '& ul, & ol': { pl: 3, mb: 1.5 },
+              '& li': { mb: 0.5 },
+              '& table': { width: '100%', borderCollapse: 'collapse', mb: 2 },
+              '& th, & td': { border: '1px solid #ddd', padding: '8px 12px', textAlign: 'left' },
+              '& th': { backgroundColor: '#f5f5f5', fontWeight: 600 },
+              '& strong': { fontWeight: 600, color: '#A020F0' },
+              '& code': { backgroundColor: '#f5f5f5', padding: '2px 6px', borderRadius: '4px', fontSize: '0.9em' }
+            }}>
+              <ReactMarkdown>{analysis}</ReactMarkdown>
+            </Box>
           </CardContent>
         </Card>
       )}

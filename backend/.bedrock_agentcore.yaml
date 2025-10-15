@@ -1,16 +1,16 @@
-default_agent: banking_strands_agent
+default_agent: bank_iq_agent_v1
 agents:
-  bankiq_strands_agent:
-    name: bankiq_strands_agent
-    entrypoint: bankiq_strands_agent.py
-    platform: linux/arm64
+  bank-iq-agent:
+    name: bank-iq-agent
+    entrypoint: bank_iq_agent_v1.py
+    platform: linux/amd64
     container_runtime: docker
     aws:
-      execution_role: arn:aws:iam::164543933824:role/AmazonBedrockAgentCoreSDKRuntime-us-east-1-480fc058aa
+      execution_role: null
       execution_role_auto_create: false
-      account: '164543933824'
-      region: us-east-1
-      ecr_repository: 164543933824.dkr.ecr.us-east-1.amazonaws.com/bedrock-agentcore-bankiq_strands_agent
+      account: null
+      region: null
+      ecr_repository: null
       ecr_auto_create: false
       network_configuration:
         network_mode: PUBLIC
@@ -19,34 +19,34 @@ agents:
       observability:
         enabled: true
     bedrock_agentcore:
-      agent_id: bankiq_strands_agent-SItO7H3YZ8
-      agent_arn: arn:aws:bedrock-agentcore:us-east-1:164543933824:runtime/bankiq_strands_agent-SItO7H3YZ8
-      agent_session_id: fbbc5e06-15e1-4c47-9df9-59e7b5dd9770
+      agent_id: null
+      agent_arn: null
+      agent_session_id: null
     codebuild:
       project_name: null
       execution_role: null
       source_bucket: null
     memory:
       mode: STM_ONLY
-      memory_id: bankiq_strands_agent_mem-nl4kN6Hzzt
-      memory_arn: arn:aws:bedrock-agentcore:us-east-1:164543933824:memory/bankiq_strands_agent_mem-nl4kN6Hzzt
-      memory_name: bankiq_strands_agent_mem
+      memory_id: null
+      memory_arn: null
+      memory_name: null
       event_expiry_days: 30
       first_invoke_memory_check_done: false
     authorizer_configuration: null
     request_header_configuration: null
     oauth_configuration: null
-  banking_strands_agent:
-    name: banking_strands_agent
-    entrypoint: /Users/shamakka/Documents/projects/peer-bank-analytics-agentic/backend/banking_strands_agent.py
+  bank_iq_agent_v1:
+    name: bank_iq_agent_v1
+    entrypoint: bank_iq_agent_v1.py
     platform: linux/arm64
     container_runtime: docker
     aws:
-      execution_role: arn:aws:iam::164543933824:role/AmazonBedrockAgentCoreSDKRuntime-us-east-1-c7ffe262f0
-      execution_role_auto_create: false
+      execution_role: arn:aws:iam::164543933824:role/BedrockAgentCoreExecutionRole
+      execution_role_auto_create: true
       account: '164543933824'
       region: us-east-1
-      ecr_repository: 164543933824.dkr.ecr.us-east-1.amazonaws.com/bedrock-agentcore-banking_strands_agent
+      ecr_repository: 164543933824.dkr.ecr.us-east-1.amazonaws.com/bedrock-agentcore-bank_iq_agent_v1
       ecr_auto_create: false
       network_configuration:
         network_mode: PUBLIC
@@ -55,18 +55,18 @@ agents:
       observability:
         enabled: true
     bedrock_agentcore:
-      agent_id: banking_strands_agent-edyPskEp8w
-      agent_arn: arn:aws:bedrock-agentcore:us-east-1:164543933824:runtime/banking_strands_agent-edyPskEp8w
-      agent_session_id: null
+      agent_id: bank_iq_agent_v1-8r28UWE5Z8
+      agent_arn: arn:aws:bedrock-agentcore:us-east-1:164543933824:runtime/bank_iq_agent_v1-8r28UWE5Z8
+      agent_session_id: 5806b8a6-29b6-447a-abcc-a7973390057a
     codebuild:
-      project_name: bedrock-agentcore-banking_strands_agent-builder
-      execution_role: arn:aws:iam::164543933824:role/AmazonBedrockAgentCoreSDKCodeBuild-us-east-1-c7ffe262f0
-      source_bucket: bedrock-agentcore-codebuild-sources-164543933824-us-east-1
+      project_name: null
+      execution_role: null
+      source_bucket: null
     memory:
       mode: STM_ONLY
-      memory_id: banking_strands_agent_mem-csJ1913R8O
-      memory_arn: arn:aws:bedrock-agentcore:us-east-1:164543933824:memory/banking_strands_agent_mem-csJ1913R8O
-      memory_name: banking_strands_agent_mem
+      memory_id: bank_iq_agent_v1_mem-1RUigaA4KT
+      memory_arn: arn:aws:bedrock-agentcore:us-east-1:164543933824:memory/bank_iq_agent_v1_mem-1RUigaA4KT
+      memory_name: bank_iq_agent_v1_mem
       event_expiry_days: 30
       first_invoke_memory_check_done: false
     authorizer_configuration: null

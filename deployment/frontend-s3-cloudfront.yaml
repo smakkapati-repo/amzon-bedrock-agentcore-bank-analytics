@@ -1,0 +1,170 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'BankIQ+ Frontend - S3 + CloudFront with IP Restriction'
+
+Parameters:
+  YourIPAddress:
+    Type: String
+    Description: Your IP address for access restriction (e.g., 1.2.3.4/32)
+    AllowedPattern: '^(\d{1,3}\.){3}\d{1,3}/\d{1,2}$'
+    ConstraintDescription: Must be a valid IP address in CIDR notation (e.g., 1.2.3.4/32)
+
+Resources:
+  # S3 Bucket for Frontend
+  FrontendBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 'bankiq-frontend-${AWS::AccountId}'
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      WebsiteConfiguration:
+        IndexDocument: index.html
+        ErrorDocument: index.html
+      VersioningConfiguration:
+        Status: Enabled
+      Tags:
+        - Key: Name
+          Value: BankIQ-Frontend
+        - Key: Project
+          Value: BankIQ
+
+  # CloudFront Origin Access Identity
+  CloudFrontOAI:
+    Type: AWS::CloudFront::CloudFrontOriginAccessIdentity
+    Properties:
+      CloudFrontOriginAccessIdentityConfig:
+        Comment: !Sub 'OAI for BankIQ Frontend ${AWS::StackName}'
+
+  # S3 Bucket Policy
+  FrontendBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref FrontendBucket
+      PolicyDocument:
+        Statement:
+          - Sid: AllowCloudFrontOAI
+            Effect: Allow
+            Principal:
+              CanonicalUser: !GetAtt CloudFrontOAI.S3CanonicalUserId
+            Action: 's3:GetObject'
+            Resource: !Sub '${FrontendBucket.Arn}/*'
+
+  # CloudFront Distribution
+  CloudFrontDistribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Enabled: true
+        Comment: BankIQ+ Frontend Distribution
+        DefaultRootObject: index.html
+        HttpVersion: http2
+        IPV6Enabled: true
+        
+        # Origin - S3 Bucket
+        Origins:
+          - Id: S3Origin
+            DomainName: !GetAtt FrontendBucket.RegionalDomainName
+            S3OriginConfig:
+              OriginAccessIdentity: !Sub 'origin-access-identity/cloudfront/${CloudFrontOAI}'
+        
+        # Default Cache Behavior
+        DefaultCacheBehavior:
+          TargetOriginId: S3Origin
+          ViewerProtocolPolicy: redirect-to-https
+          AllowedMethods:
+            - GET
+            - HEAD
+            - OPTIONS
+          CachedMethods:
+            - GET
+            - HEAD
+          Compress: true
+          ForwardedValues:
+            QueryString: false
+            Cookies:
+              Forward: none
+          MinTTL: 0
+          DefaultTTL: 86400
+          MaxTTL: 31536000
+        
+        # Custom Error Responses removed - they were causing issues with static assets
+        # For React Router, handle routing in the app itself
+        
+        # Note: WAF IP restriction disabled due to propagation issues
+        # Consider using CloudFront signed URLs or application-level auth for security
+        
+        # Price Class
+        PriceClass: PriceClass_100
+        
+        # Viewer Certificate
+        ViewerCertificate:
+          CloudFrontDefaultCertificate: true
+
+  # WAF Web ACL for IP Restriction
+  WebACL:
+    Type: AWS::WAFv2::WebACL
+    Properties:
+      Name: !Sub 'BankIQ-Frontend-IPRestriction-${AWS::StackName}'
+      Scope: CLOUDFRONT
+      DefaultAction:
+        Block: {}
+      Description: IP restriction for BankIQ Frontend
+      Rules:
+        - Name: AllowMyIP
+          Priority: 0
+          Statement:
+            IPSetReferenceStatement:
+              Arn: !GetAtt IPSet.Arn
+          Action:
+            Allow: {}
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: AllowMyIP
+      VisibilityConfig:
+        SampledRequestsEnabled: true
+        CloudWatchMetricsEnabled: true
+        MetricName: BankIQFrontendWAF
+
+  # IP Set for Allowed IPs
+  IPSet:
+    Type: AWS::WAFv2::IPSet
+    Properties:
+      Name: !Sub 'BankIQ-AllowedIPs-${AWS::StackName}'
+      Scope: CLOUDFRONT
+      IPAddressVersion: IPV4
+      Addresses:
+        - !Ref YourIPAddress
+      Description: Allowed IP addresses for BankIQ Frontend
+
+Outputs:
+  BucketName:
+    Description: S3 Bucket Name
+    Value: !Ref FrontendBucket
+    Export:
+      Name: !Sub '${AWS::StackName}-BucketName'
+
+  CloudFrontURL:
+    Description: CloudFront Distribution URL
+    Value: !GetAtt CloudFrontDistribution.DomainName
+    Export:
+      Name: !Sub '${AWS::StackName}-CloudFrontURL'
+
+  CloudFrontDistributionId:
+    Description: CloudFront Distribution ID
+    Value: !Ref CloudFrontDistribution
+    Export:
+      Name: !Sub '${AWS::StackName}-DistributionId'
+
+  WebsiteURL:
+    Description: Website URL
+    Value: !Sub 'https://${CloudFrontDistribution.DomainName}'
+
+  DeployCommand:
+    Description: Command to deploy frontend
+    Value: !Sub |
+      cd frontend && npm run build
+      aws s3 sync build/ s3://${FrontendBucket}/ --delete
+      aws cloudfront create-invalidation --distribution-id ${CloudFrontDistribution} --paths "/*"
