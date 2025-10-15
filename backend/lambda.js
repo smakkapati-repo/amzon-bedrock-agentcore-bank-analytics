@@ -43,61 +43,27 @@ app.post('/api/invoke-agent', async (req, res) => {
   console.log(`[${new Date().toISOString()}] Invoking agent: ${inputText.substring(0, 100)}...`);
 
   try {
-    // In Lambda, invoke Agent Lambda function
-    if (process.env.AGENT_LAMBDA_ARN) {
-      const lambda = new AWS.Lambda();
-      const result = await lambda.invoke({
-        FunctionName: process.env.AGENT_LAMBDA_ARN,
-        InvocationType: 'RequestResponse',
-        Payload: JSON.stringify({ prompt: inputText, sessionId })
-      }).promise();
-
-      const response = JSON.parse(result.Payload);
-      console.log(`[${new Date().toISOString()}] Agent response received`);
-      
-      res.json({
-        output: response.message || response.output || 'No response',
-        sessionId: response.sessionId || sessionId,
-        runtime: 'Lambda'
-      });
-    } else {
-      // Fallback to subprocess (for local testing)
-      const python = spawn('python3', [path.join(__dirname, 'invoke-agentcore.py')]);
-      
-      let output = '';
-      let error = '';
-      
-      python.stdout.on('data', (data) => {
-        output += data.toString();
-      });
-      
-      python.stderr.on('data', (data) => {
-        error += data.toString();
-        console.error('Python stderr:', data.toString());
-      });
-      
-      python.stdin.write(JSON.stringify({ prompt: inputText, sessionId }));
-      python.stdin.end();
-      
-      python.on('close', (code) => {
-        if (code !== 0) {
-          console.error('Python process failed:', error);
-          return res.status(500).json({ error: error || 'Failed to invoke agent' });
-        }
-        
-        try {
-          const result = JSON.parse(output);
-          console.log(`[${new Date().toISOString()}] Agent response received`);
-          res.json({ 
-            output: result.output || 'No response',
-            sessionId: result.sessionId,
-            runtime: 'Subprocess'
-          });
-        } catch (e) {
-          res.status(500).json({ error: 'Failed to parse response' });
-        }
-      });
-    }
+    // Use existing AgentCore deployment (same as v1.0)
+    // AgentCore CLI is available in Lambda via Lambda Layer
+    const { execSync } = require('child_process');
+    
+    const agentcoreCmd = sessionId 
+      ? `agentcore invoke '${JSON.stringify({ prompt: inputText })}' --session-id ${sessionId}`
+      : `agentcore invoke '${JSON.stringify({ prompt: inputText })}'`;
+    
+    const output = execSync(agentcoreCmd, {
+      encoding: 'utf-8',
+      maxBuffer: 10 * 1024 * 1024 // 10MB
+    });
+    
+    const result = JSON.parse(output);
+    console.log(`[${new Date().toISOString()}] Agent response received from AgentCore`);
+    
+    res.json({
+      output: result.output || result.message || 'No response',
+      sessionId: result.sessionId || sessionId,
+      runtime: 'AgentCore'
+    });
   } catch (error) {
     console.error('Agent invocation error:', error);
     res.status(500).json({ error: error.message });

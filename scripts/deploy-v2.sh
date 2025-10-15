@@ -153,32 +153,22 @@ pip install -r requirements.txt -t python/
 echo "Packaging backend Lambda..."
 zip -r backend-lambda.zip lambda.js node_modules/ package.json
 
-# Package agent Lambda
-echo "Packaging agent Lambda..."
-zip -r agent-lambda.zip bank_iq_agent_v1.py invoke-agentcore.py python/ .bedrock_agentcore.yaml
-
-# Update Lambda functions
-echo "Updating Lambda functions..."
+# Update Lambda function
+echo "Updating Lambda function..."
 BACKEND_LAMBDA=$(aws cloudformation describe-stacks \
   --stack-name $BACKEND_STACK \
   --query 'Stacks[0].Outputs[?OutputKey==`BackendLambdaArn`].OutputValue' \
-  --output text | awk -F: '{print $NF}')
-
-AGENT_LAMBDA=$(aws cloudformation describe-stacks \
-  --stack-name $BACKEND_STACK \
-  --query 'Stacks[0].Outputs[?OutputKey==`AgentLambdaArn`].OutputValue' \
   --output text | awk -F: '{print $NF}')
 
 aws lambda update-function-code \
   --function-name $BACKEND_LAMBDA \
   --zip-file fileb://backend-lambda.zip
 
-aws lambda update-function-code \
-  --function-name $AGENT_LAMBDA \
-  --zip-file fileb://agent-lambda.zip
-
 # Cleanup
-rm -rf python/ backend-lambda.zip agent-lambda.zip
+rm -rf backend-lambda.zip
+
+echo ""
+echo "Note: Using existing AgentCore deployment (no agent packaging needed)"
 
 cd ..
 

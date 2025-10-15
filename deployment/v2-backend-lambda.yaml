@@ -28,11 +28,13 @@ Resources:
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
-              # Bedrock Access
+              # Bedrock Access (for AgentCore)
               - Effect: Allow
                 Action:
                   - 'bedrock:InvokeModel'
                   - 'bedrock:InvokeModelWithResponseStream'
+                  - 'bedrock-agent:InvokeAgent'
+                  - 'bedrock-agent:Retrieve'
                 Resource: '*'
               # S3 Access
               - Effect: Allow
@@ -43,13 +45,9 @@ Resources:
                 Resource:
                   - 'arn:aws:s3:::bankiq-uploaded-docs'
                   - 'arn:aws:s3:::bankiq-uploaded-docs/*'
-              # Lambda Invoke (for Agent Lambda)
-              - Effect: Allow
-                Action:
-                  - 'lambda:InvokeFunction'
-                Resource: !GetAtt AgentLambda.Arn
 
   # Backend Lambda Function (Node.js)
+  # Uses existing AgentCore deployment (no separate Agent Lambda needed)
   BackendLambda:
     Type: AWS::Lambda::Function
     Properties:
@@ -57,12 +55,14 @@ Resources:
       Runtime: nodejs18.x
       Handler: lambda.handler
       Role: !GetAtt LambdaExecutionRole.Arn
-      Timeout: 30
-      MemorySize: 512
+      Timeout: 300
+      MemorySize: 1024
       Environment:
         Variables:
-          AGENT_LAMBDA_ARN: !GetAtt AgentLambda.Arn
           AWS_REGION: !Ref AWS::Region
+      Layers:
+        # AgentCore CLI Layer (contains agentcore command)
+        - !Sub 'arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:layer:agentcore-cli:1'
       Code:
         ZipFile: |
           // Placeholder - will be replaced with actual code
@@ -79,30 +79,6 @@ Resources:
       Tags:
         - Key: Name
           Value: BankIQ-v2-Backend
-        - Key: Version
-          Value: v2.0.0
-
-  # Agent Lambda Function (Python + AgentCore)
-  AgentLambda:
-    Type: AWS::Lambda::Function
-    Properties:
-      FunctionName: !Sub 'BankIQ-v2-Agent-${AWS::StackName}'
-      Runtime: python3.11
-      Handler: bank_iq_agent_v1.invoke
-      Role: !GetAtt LambdaExecutionRole.Arn
-      Timeout: 300
-      MemorySize: 1024
-      Environment:
-        Variables:
-          AWS_REGION: !Ref AWS::Region
-      Code:
-        ZipFile: |
-          # Placeholder - will be replaced with actual code
-          def invoke(event, context):
-              return {'message': 'Agent Lambda placeholder'}
-      Tags:
-        - Key: Name
-          Value: BankIQ-v2-Agent
         - Key: Version
           Value: v2.0.0
 
@@ -207,11 +183,9 @@ Outputs:
     Export:
       Name: !Sub '${AWS::StackName}-BackendLambdaArn'
 
-  AgentLambdaArn:
-    Description: Agent Lambda ARN
-    Value: !GetAtt AgentLambda.Arn
-    Export:
-      Name: !Sub '${AWS::StackName}-AgentLambdaArn'
+  AgentNote:
+    Description: Agent Configuration
+    Value: Using existing AgentCore deployment (no separate Lambda)
 
   SecurityNote:
     Description: Security Configuration
