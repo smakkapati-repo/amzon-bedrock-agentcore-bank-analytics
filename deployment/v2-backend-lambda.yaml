@@ -1,0 +1,231 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'BankIQ+ v2.0 Backend - Lambda + API Gateway with IP Restriction'
+
+Parameters:
+  YourIPAddress:
+    Type: String
+    Description: Your IP address for API access (e.g., 1.2.3.4/32)
+    AllowedPattern: '^(\d{1,3}\.){3}\d{1,3}/\d{1,2}$'
+    ConstraintDescription: Must be a valid IP address in CIDR notation
+
+Resources:
+  # Lambda Execution Role
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'BankIQ-v2-Lambda-Role-${AWS::StackName}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole'
+      Policies:
+        - PolicyName: BankIQPermissions
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              # Bedrock Access
+              - Effect: Allow
+                Action:
+                  - 'bedrock:InvokeModel'
+                  - 'bedrock:InvokeModelWithResponseStream'
+                Resource: '*'
+              # S3 Access
+              - Effect: Allow
+                Action:
+                  - 's3:GetObject'
+                  - 's3:PutObject'
+                  - 's3:ListBucket'
+                Resource:
+                  - 'arn:aws:s3:::bankiq-uploaded-docs'
+                  - 'arn:aws:s3:::bankiq-uploaded-docs/*'
+              # Lambda Invoke (for Agent Lambda)
+              - Effect: Allow
+                Action:
+                  - 'lambda:InvokeFunction'
+                Resource: !GetAtt AgentLambda.Arn
+
+  # Backend Lambda Function (Node.js)
+  BackendLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub 'BankIQ-v2-Backend-${AWS::StackName}'
+      Runtime: nodejs18.x
+      Handler: lambda.handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 30
+      MemorySize: 512
+      Environment:
+        Variables:
+          AGENT_LAMBDA_ARN: !GetAtt AgentLambda.Arn
+          AWS_REGION: !Ref AWS::Region
+      Code:
+        ZipFile: |
+          // Placeholder - will be replaced with actual code
+          exports.handler = async (event) => {
+            return {
+              statusCode: 200,
+              headers: {
+                'Content-Type': 'application/json',
+                'Access-Control-Allow-Origin': '*'
+              },
+              body: JSON.stringify({ message: 'Backend Lambda placeholder' })
+            };
+          };
+      Tags:
+        - Key: Name
+          Value: BankIQ-v2-Backend
+        - Key: Version
+          Value: v2.0.0
+
+  # Agent Lambda Function (Python + AgentCore)
+  AgentLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub 'BankIQ-v2-Agent-${AWS::StackName}'
+      Runtime: python3.11
+      Handler: bank_iq_agent_v1.invoke
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 300
+      MemorySize: 1024
+      Environment:
+        Variables:
+          AWS_REGION: !Ref AWS::Region
+      Code:
+        ZipFile: |
+          # Placeholder - will be replaced with actual code
+          def invoke(event, context):
+              return {'message': 'Agent Lambda placeholder'}
+      Tags:
+        - Key: Name
+          Value: BankIQ-v2-Agent
+        - Key: Version
+          Value: v2.0.0
+
+  # API Gateway REST API
+  ApiGateway:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: !Sub 'BankIQ-v2-API-${AWS::StackName}'
+      Description: BankIQ+ v2.0 API with IP Restriction
+      EndpointConfiguration:
+        Types:
+          - REGIONAL
+      Policy:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: '*'
+            Action: 'execute-api:Invoke'
+            Resource: 'execute-api:/*'
+            Condition:
+              IpAddress:
+                'aws:SourceIp':
+                  - !Ref YourIPAddress
+
+  # API Gateway Resource (Proxy)
+  ApiResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref ApiGateway
+      ParentId: !GetAtt ApiGateway.RootResourceId
+      PathPart: '{proxy+}'
+
+  # API Gateway Method (ANY)
+  ApiMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref ApiGateway
+      ResourceId: !Ref ApiResource
+      HttpMethod: ANY
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${BackendLambda.Arn}/invocations'
+
+  # API Gateway Method (OPTIONS for CORS)
+  ApiMethodOptions:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref ApiGateway
+      ResourceId: !Ref ApiResource
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+              method.response.header.Access-Control-Allow-Methods: "'GET,POST,PUT,DELETE,OPTIONS'"
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+            ResponseTemplates:
+              application/json: ''
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Origin: true
+
+  # API Gateway Deployment
+  ApiDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn:
+      - ApiMethod
+      - ApiMethodOptions
+    Properties:
+      RestApiId: !Ref ApiGateway
+      StageName: prod
+
+  # Lambda Permission for API Gateway
+  BackendLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref BackendLambda
+      Action: 'lambda:InvokeFunction'
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*'
+
+Outputs:
+  ApiGatewayURL:
+    Description: API Gateway URL (IP Restricted)
+    Value: !Sub 'https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/prod'
+    Export:
+      Name: !Sub '${AWS::StackName}-ApiURL'
+
+  BackendLambdaArn:
+    Description: Backend Lambda ARN
+    Value: !GetAtt BackendLambda.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-BackendLambdaArn'
+
+  AgentLambdaArn:
+    Description: Agent Lambda ARN
+    Value: !GetAtt AgentLambda.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-AgentLambdaArn'
+
+  SecurityNote:
+    Description: Security Configuration
+    Value: !Sub |
+      API Gateway is restricted to IP: ${YourIPAddress}
+      Only requests from this IP can access the API
+      CloudFront (frontend) is public but API calls will fail from other IPs
+
+  UpdateIPCommand:
+    Description: Command to update allowed IP
+    Value: !Sub |
+      # To update the allowed IP address:
+      aws cloudformation update-stack \
+        --stack-name ${AWS::StackName} \
+        --use-previous-template \
+        --parameters ParameterKey=YourIPAddress,ParameterValue=NEW_IP/32 \
+        --capabilities CAPABILITY_NAMED_IAM
