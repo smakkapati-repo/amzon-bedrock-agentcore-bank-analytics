@@ -59,7 +59,7 @@ Resources:
       MemorySize: 1024
       Environment:
         Variables:
-          AWS_REGION: !Ref AWS::Region
+          REGION: !Ref AWS::Region
       Layers:
         # AgentCore CLI Layer (contains agentcore command)
         - 'arn:aws:lambda:us-east-1:164543933824:layer:agentcore-cli:1'
