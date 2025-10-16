@@ -42,17 +42,22 @@ echo ""
 
 FRONTEND_STACK="bankiq-v2-frontend"
 
-echo "Creating CloudFormation stack: $FRONTEND_STACK"
-aws cloudformation create-stack \
-  --stack-name $FRONTEND_STACK \
-  --template-body file://deployment/v2-frontend-cloudfront.yaml \
-  --capabilities CAPABILITY_NAMED_IAM \
-  --tags Key=Project,Value=BankIQ Key=Version,Value=v2.0.0
+echo "Checking if frontend stack exists..."
+if aws cloudformation describe-stacks --stack-name $FRONTEND_STACK 2>/dev/null; then
+    echo "✅ Frontend stack already exists, skipping creation"
+else
+    echo "Creating CloudFormation stack: $FRONTEND_STACK"
+    aws cloudformation create-stack \
+      --stack-name $FRONTEND_STACK \
+      --template-body file://deployment/v2-frontend-cloudfront.yaml \
+      --capabilities CAPABILITY_NAMED_IAM \
+      --tags Key=Project,Value=BankIQ Key=Version,Value=v2.0.0
 
-echo "⏳ Waiting for frontend stack to complete..."
-aws cloudformation wait stack-create-complete --stack-name $FRONTEND_STACK
+    echo "⏳ Waiting for frontend stack to complete..."
+    aws cloudformation wait stack-create-complete --stack-name $FRONTEND_STACK
 
-echo "✅ Frontend stack created!"
+    echo "✅ Frontend stack created!"
+fi
 echo ""
 
 # Get CloudFront URL
@@ -83,18 +88,23 @@ echo ""
 
 BACKEND_STACK="bankiq-v2-backend"
 
-echo "Creating CloudFormation stack: $BACKEND_STACK"
-aws cloudformation create-stack \
-  --stack-name $BACKEND_STACK \
-  --template-body file://deployment/v2-backend-lambda.yaml \
-  --parameters ParameterKey=YourIPAddress,ParameterValue=$IP_CIDR \
-  --capabilities CAPABILITY_NAMED_IAM \
-  --tags Key=Project,Value=BankIQ Key=Version,Value=v2.0.0
+echo "Checking if backend stack exists..."
+if aws cloudformation describe-stacks --stack-name $BACKEND_STACK 2>/dev/null; then
+    echo "✅ Backend stack already exists, skipping creation"
+else
+    echo "Creating CloudFormation stack: $BACKEND_STACK"
+    aws cloudformation create-stack \
+      --stack-name $BACKEND_STACK \
+      --template-body file://deployment/v2-backend-lambda.yaml \
+      --parameters ParameterKey=YourIPAddress,ParameterValue=$IP_CIDR \
+      --capabilities CAPABILITY_NAMED_IAM \
+      --tags Key=Project,Value=BankIQ Key=Version,Value=v2.0.0
 
-echo "⏳ Waiting for backend stack to complete..."
-aws cloudformation wait stack-create-complete --stack-name $BACKEND_STACK
+    echo "⏳ Waiting for backend stack to complete..."
+    aws cloudformation wait stack-create-complete --stack-name $BACKEND_STACK
 
-echo "✅ Backend stack created!"
+    echo "✅ Backend stack created!"
+fi
 echo ""
 
 # Get API Gateway URL
