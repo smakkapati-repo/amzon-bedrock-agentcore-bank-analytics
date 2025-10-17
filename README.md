@@ -16,24 +16,7 @@ The AI agent can instantly correlate a bank's declining Net Interest Margin with
 # Access at CloudFront URL (output after deployment)
 ```
 
-## 📁 Project Structure
 
-```
-peer-bank-analytics-agentic/
-├── backend/
-│   ├── bank_iq_agent_v1.py      # Strands agent (12 tools)
-│   ├── server.js                # Express API server
-│   ├── Dockerfile               # Agent container
-│   └── Dockerfile.backend       # Backend container
-├── frontend/
-│   └── src/                     # React UI
-├── cfn/
-│   ├── templates/               # CloudFormation templates
-│   └── scripts/                 # Deployment scripts
-├── arch/
-│   └── banking_architecture_diagram.py  # Architecture diagram
-└── DEPLOYMENT_GUIDE.md          # Complete deployment guide
-```
 
 ## ✨ Features
 
@@ -165,29 +148,88 @@ See `backend/README_AGENT.md` for details.
 4. Enable: **Anthropic Claude Sonnet 4.5**
 5. Wait for approval (usually instant)
 
-### One-Command Deployment
+### Step-by-Step Deployment
 
+**Step 1: Clone Repository**
 ```bash
-# Clone repository
 git clone https://github.com/smakkapati-repo/peer-bank-analytics-agentic.git
 cd peer-bank-analytics-agentic
+```
 
-# Deploy everything
+**Step 2: Install AgentCore CLI**
+```bash
+pip install bedrock-agentcore-starter-toolkit
+agentcore --version  # Verify installation
+```
+
+**Step 3: Configure AWS CLI**
+```bash
+aws configure
+# Enter your AWS Access Key ID
+# Enter your AWS Secret Access Key
+# Enter region: us-east-1
+# Enter output format: json
+```
+
+**Step 4: Deploy Everything (One Command)**
+```bash
 ./cfn/scripts/deploy-all.sh
 ```
 
-**Deployment Time**: ~15-20 minutes
+**Deployment Progress:**
+- 🔵 **[1/4] AgentCore Agent** (~3-5 minutes)
+  - Builds and deploys Python agent with 12 tools
+  - Adds S3 permissions automatically
+  - Creates conversational memory
 
-**What Gets Deployed:**
-- ✅ AgentCore agent with 12 AI tools
-- ✅ VPC with public/private subnets
-- ✅ Application Load Balancer
-- ✅ ECS Fargate cluster and service
-- ✅ CloudFront distribution
-- ✅ S3 buckets (frontend + documents)
-- ✅ ECR repository with Docker image
-- ✅ IAM roles with minimal permissions
-- ✅ CloudWatch log groups
+- 🔵 **[2/4] Infrastructure** (~5-7 minutes)
+  - VPC with public/private subnets
+  - Application Load Balancer
+  - ECS cluster
+  - S3 buckets
+
+- 🔵 **[3/4] Backend** (~3-5 minutes)
+  - Builds Docker image
+  - Pushes to ECR
+  - Deploys ECS service
+
+- 🔵 **[4/4] Frontend** (~2-3 minutes)
+  - Builds React app
+  - Uploads to S3
+  - Creates CloudFront distribution
+
+**Total Time**: ~15-20 minutes
+
+**Step 5: Access Your Application**
+
+After deployment completes, you'll see:
+```
+✅ DEPLOYMENT COMPLETE!
+🌐 CloudFront URL: https://d2mlfyaj7qolx.cloudfront.net
+```
+
+Open the CloudFront URL in your browser to access BankIQ+!
+
+## 🔍 Verify Deployment
+
+**Check Health:**
+```bash
+# Get CloudFront URL
+CLOUDFRONT_URL=$(aws cloudfront list-distributions --query "DistributionList.Items[?contains(Origins.Items[0].DomainName, 'bankiq-frontend')].DomainName" --output text)
+
+# Test health endpoint
+curl https://$CLOUDFRONT_URL/api/health
+# Expected: {"status":"healthy","service":"BankIQ+ Backend"}
+```
+
+**View Logs:**
+```bash
+# ECS backend logs
+aws logs tail /ecs/bankiq-backend --follow
+
+# AgentCore logs
+agentcore status
+```
 
 ## 💰 Cost Estimate
 
@@ -200,22 +242,24 @@ Monthly costs (24/7 operation):
 
 **Total**: ~$50-90/month
 
-## 🔄 Update Deployment
+## 🧹 Cleanup
 
-### Update Backend
+To delete all resources:
+
 ```bash
-cd backend
-docker build -f Dockerfile.backend -t bankiq-backend .
-# Push to ECR (see DEPLOYMENT_GUIDE.md)
+./cfn/scripts/cleanup.sh
 ```
 
-### Update Frontend
-```bash
-cd frontend
-npm run build
-aws s3 sync build/ s3://BUCKET_NAME/ --delete
-aws cloudfront create-invalidation --distribution-id DIST_ID --paths "/*"
-```
+This will remove:
+- ✅ CloudFormation stacks
+- ✅ S3 buckets (with contents)
+- ✅ ECR images and repositories
+- ✅ ECS cluster and services
+- ✅ CloudFront distribution
+- ✅ AgentCore agent
+- ✅ All associated resources
+
+**Time**: ~10-15 minutes
 
 ## 📝 Monitoring
 
