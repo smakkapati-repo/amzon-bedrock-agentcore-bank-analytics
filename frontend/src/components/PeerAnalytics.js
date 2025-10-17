@@ -9,6 +9,8 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Responsi
 import { api } from '../services/api';
 import ReactMarkdown from 'react-markdown';
 
+const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || 'http://localhost:3001';
+
 function PeerAnalytics() {
   const [selectedBank, setSelectedBank] = useState('');
   const [selectedPeers, setSelectedPeers] = useState([]);
@@ -25,15 +27,28 @@ function PeerAnalytics() {
   const [hasQuarterly, setHasQuarterly] = useState(false);
   const [hasMonthly, setHasMonthly] = useState(false);
 
-  const banks = [
-    'JPMorgan Chase', 'Bank of America', 'Wells Fargo', 'Citigroup', 
-    'U.S. Bancorp', 'PNC Financial', 'Goldman Sachs', 'Truist Financial',
-    'Capital One', 'Regions Financial', 'Fifth Third Bancorp'
-  ];
+  const [bankSearchQuery, setBankSearchQuery] = useState('');
+  const [bankSearchResults, setBankSearchResults] = useState([]);
+  const [peerSearchQuery, setPeerSearchQuery] = useState('');
+  const [peerSearchResults, setPeerSearchResults] = useState([]);
+  
+  const searchBanks = async (query, setPeerResults = false) => {
+    if (query.length < 2) {
+      setPeerResults ? setPeerSearchResults([]) : setBankSearchResults([]);
+      return;
+    }
+    const results = await api.searchBanks(query);
+    setPeerResults ? setPeerSearchResults(results) : setBankSearchResults(results);
+  };
 
   const quarterlyMetrics = [
-    '[Q] Return on Assets (ROA)', '[Q] Return on Equity (ROE)', '[Q] Net Interest Margin (NIM)',
-    '[Q] Tier 1 Capital Ratio', '[Q] Loan-to-Deposit Ratio (LDR)', '[Q] CRE Concentration Ratio (%)'
+    '[Q] Return on Assets (ROA)', 
+    '[Q] Return on Equity (ROE)', 
+    '[Q] Net Interest Margin (NIM)',
+    '[Q] Efficiency Ratio', 
+    '[Q] Loan-to-Deposit Ratio', 
+    '[Q] Equity Ratio',
+    '[Q] CRE Concentration Ratio'
   ];
 
   const monthlyMetrics = [
@@ -45,8 +60,10 @@ function PeerAnalytics() {
   const metrics = analysisType === 'Quarterly Metrics' ? quarterlyMetrics : monthlyMetrics;
 
   useEffect(() => {
-    loadFDICData();
-  }, []);
+    if (dataMode === 'live') {
+      loadFDICData();
+    }
+  }, [dataMode]);
 
   const [dataSource, setDataSource] = useState('');
 
@@ -134,21 +151,46 @@ function PeerAnalytics() {
         });
         
         // Generate AI analysis for local data
+        const prompt = `Analyze peer banking performance for ${selectedMetric}:\n\nBase Bank: ${apiBaseBank}\nPeer Banks: ${apiPeerBanks.join(', ')}\n\nData shows ${longFormatData.length} quarterly data points. Provide a concise 2-paragraph analysis comparing ${apiBaseBank}'s performance against peers on ${selectedMetric}, highlighting key trends and competitive positioning.`;
+        
         try {
-          const analysisResponse = await fetch('/api/analyze-local-data', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              data: longFormatData,
-              baseBank: apiBaseBank,
-              peerBanks: apiPeerBanks,
-              metric: selectedMetric
-            })
-          });
-          const analysisResult = await analysisResponse.json();
-          result = { data: longFormatData, analysis: analysisResult.analysis };
+          const job = await api.submitJob(prompt);
+          const jobResult = await api.pollJobUntilComplete(job.jobId);
+          let analysisText = jobResult.result || 'Analysis completed.';
+          
+          // Parse if response contains DATA: prefix (agent returning structured data)
+          if (analysisText.includes('DATA:')) {
+            // Extract everything after the JSON data
+            const lines = analysisText.split('\n');
+            const analysisStartIdx = lines.findIndex(line => 
+              !line.trim().startsWith('DATA:') && 
+              !line.trim().startsWith('{') && 
+              !line.trim().startsWith('}') &&
+              !line.includes('"data"') &&
+              !line.includes('"Bank"') &&
+              !line.includes('"Quarter"') &&
+              line.trim().length > 20
+            );
+            
+            if (analysisStartIdx > 0) {
+              analysisText = lines.slice(analysisStartIdx).join('\n').trim();
+            } else {
+              // Try JSON parsing as fallback
+              try {
+                const dataMatch = analysisText.match(/DATA:\s*({.*?})\s*([\s\S]*)/s);
+                if (dataMatch && dataMatch[2]) {
+                  analysisText = dataMatch[2].trim();
+                }
+              } catch (e) {
+                console.log('Could not parse DATA response');
+              }
+            }
+          }
+          
+          result = { data: longFormatData, analysis: analysisText };
         } catch (err) {
-          result = { data: longFormatData, analysis: `Analysis based on uploaded data for ${selectedMetric}` };
+          console.error('CSV analysis error:', err);
+          result = { data: longFormatData, analysis: `**${selectedMetric} Analysis**\n\nShowing data visualization for uploaded CSV data comparing ${apiBaseBank} against ${apiPeerBanks.join(', ')}.` };
         }
       } else {
         const response = await api.analyzePeers(apiBaseBank, apiPeerBanks, selectedMetric);
@@ -181,6 +223,18 @@ function PeerAnalytics() {
     if (!data || data.length === 0) return [];
     
     const reverseMap = {
+      'JPMorgan Chase': 'JPMorgan',
+      'Bank of America': 'BofA',
+      'Wells Fargo': 'Wells',
+      'Citigroup': 'Citi',
+      'U.S. Bancorp': 'USB',
+      'PNC Financial': 'PNC',
+      'Goldman Sachs': 'Goldman',
+      'Truist Financial': 'Truist',
+      'Capital One': 'CapOne',
+      'Morgan Stanley': 'Morgan',
+      'Regions Financial': 'Regions',
+      'Fifth Third Bancorp': 'Fifth',
       'JPMORGAN CHASE BANK': 'JPMorgan',
       'BANK OF AMERICA': 'BofA',
       'WELLS FARGO BANK': 'Wells',
@@ -205,7 +259,13 @@ function PeerAnalytics() {
     });
   };
 
-  const availableBanks = dataMode === 'local' && uploadedBanks.length > 0 ? uploadedBanks : banks;
+  const defaultBanks = [
+    'JPMorgan Chase', 'Bank of America', 'Wells Fargo', 'Citigroup', 
+    'U.S. Bancorp', 'PNC Financial', 'Goldman Sachs', 'Truist Financial',
+    'Capital One', 'Regions Financial', 'Fifth Third Bancorp'
+  ];
+  
+  const availableBanks = dataMode === 'local' && uploadedBanks.length > 0 ? uploadedBanks : defaultBanks;
   const availablePeers = availableBanks.filter(bank => bank !== selectedBank);
   const availableMetrics = dataMode === 'local' && uploadedMetrics.length > 0 ? 
     (analysisType === 'Quarterly Metrics' ? uploadedMetrics.map(m => `[Q] ${m}`) : uploadedMetrics.map(m => `[M] ${m}`)) : 
@@ -276,6 +336,8 @@ function PeerAnalytics() {
               setAnalysis('');
               setChartData([]);
               setError('');
+              setLoading(false);
+              setDataSource('');
             }}
             sx={{ minWidth: 80, fontSize: '0.8rem' }}
           >
@@ -336,7 +398,7 @@ function PeerAnalytics() {
                       setUploadedData(data);
                       
                       // Store CSV data in backend
-                      fetch('/api/store-csv-data', {
+                      fetch(`${BACKEND_URL}/api/store-csv-data`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ data: data, filename: file.name })
@@ -401,35 +463,156 @@ function PeerAnalytics() {
       <Grid container spacing={3} sx={{ mb: 4 }}>
         <Grid item xs={12} md={3}>
           <FormControl fullWidth>
-            <InputLabel>Base Bank</InputLabel>
-            <Select
-              value={selectedBank}
-              label="Base Bank"
-              onChange={(e) => setSelectedBank(e.target.value)}
-            >
-              {availableBanks.map((bank) => (
-                <MenuItem key={bank} value={bank}>{bank}</MenuItem>
-              ))}
-            </Select>
+            {dataMode === 'live' ? (
+              <>
+                <InputLabel shrink>Base Bank</InputLabel>
+                <input
+                  type="text"
+                  value={bankSearchQuery}
+                  onChange={(e) => {
+                    setBankSearchQuery(e.target.value);
+                    searchBanks(e.target.value);
+                  }}
+                  onFocus={() => bankSearchQuery.length >= 2 && searchBanks(bankSearchQuery)}
+                  placeholder="Search bank name..."
+                  style={{
+                    width: '100%',
+                    padding: '16px 14px',
+                    fontSize: '16px',
+                    border: '1px solid #ccc',
+                    borderRadius: '4px',
+                    marginTop: '16px'
+                  }}
+                />
+                {bankSearchResults.length > 0 && (
+                  <Paper sx={{ position: 'absolute', zIndex: 1000, width: '100%', maxHeight: 200, overflow: 'auto', mt: 8 }}>
+                    {bankSearchResults.map((bank) => (
+                      <MenuItem
+                        key={bank.cik}
+                        onClick={() => {
+                          setSelectedBank(bank.name);
+                          setBankSearchQuery(bank.name);
+                          setBankSearchResults([]);
+                        }}
+                      >
+                        {bank.name} ({bank.ticker || 'N/A'})
+                      </MenuItem>
+                    ))}
+                  </Paper>
+                )}
+                {selectedBank && (
+                  <Typography variant="caption" sx={{ mt: 0.5, display: 'block', color: 'success.main' }}>
+                    ✓ {selectedBank}
+                  </Typography>
+                )}
+              </>
+            ) : (
+              <>
+                <InputLabel>Base Bank</InputLabel>
+                <Select
+                  value={selectedBank}
+                  label="Base Bank"
+                  onChange={(e) => setSelectedBank(e.target.value)}
+                >
+                  {availableBanks.map((bank) => (
+                    <MenuItem key={bank} value={bank}>{bank}</MenuItem>
+                  ))}
+                </Select>
+              </>
+            )}
           </FormControl>
         </Grid>
         <Grid item xs={12} md={3}>
           <FormControl fullWidth>
-            <InputLabel>Peer Banks (Max 3)</InputLabel>
-            <Select
-              multiple
-              value={selectedPeers}
-              label="Peer Banks (Max 3)"
-              onChange={(e) => setSelectedPeers(e.target.value.slice(0, 3))}
-            >
-              {availablePeers.map((bank) => (
-                <MenuItem key={bank} value={bank}>{bank}</MenuItem>
-              ))}
-            </Select>
+            {dataMode === 'live' ? (
+              <>
+                <InputLabel shrink>Peer Banks (Max 3)</InputLabel>
+                <input
+                  type="text"
+                  value={peerSearchQuery}
+                  onChange={(e) => {
+                    setPeerSearchQuery(e.target.value);
+                    searchBanks(e.target.value, true);
+                  }}
+                  onFocus={() => peerSearchQuery.length >= 2 && searchBanks(peerSearchQuery, true)}
+                  placeholder="Search peer banks..."
+                  style={{
+                    width: '100%',
+                    padding: '16px 14px',
+                    fontSize: '16px',
+                    border: '1px solid #ccc',
+                    borderRadius: '4px',
+                    marginTop: '16px'
+                  }}
+                />
+                {peerSearchResults.length > 0 && (
+                  <Paper sx={{ position: 'absolute', zIndex: 1000, width: '100%', maxHeight: 200, overflow: 'auto', mt: 8 }}>
+                    {peerSearchResults.map((bank) => (
+                      <MenuItem
+                        key={bank.cik}
+                        onClick={() => {
+                          if (selectedPeers.length < 3 && !selectedPeers.includes(bank.name)) {
+                            setSelectedPeers([...selectedPeers, bank.name]);
+                          }
+                          setPeerSearchQuery('');
+                          setPeerSearchResults([]);
+                        }}
+                      >
+                        {bank.name} ({bank.ticker || 'N/A'})
+                      </MenuItem>
+                    ))}
+                  </Paper>
+                )}
+                {selectedPeers.length > 0 && (
+                  <Box sx={{ mt: 1, display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
+                    {selectedPeers.map((peer) => (
+                      <Box
+                        key={peer}
+                        sx={{
+                          backgroundColor: '#A020F0',
+                          color: 'white',
+                          padding: '4px 8px',
+                          borderRadius: '4px',
+                          fontSize: '12px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 0.5
+                        }}
+                      >
+                        {peer}
+                        <span
+                          onClick={() => setSelectedPeers(selectedPeers.filter(p => p !== peer))}
+                          style={{ cursor: 'pointer', fontWeight: 'bold' }}
+                        >
+                          ×
+                        </span>
+                      </Box>
+                    ))}
+                  </Box>
+                )}
+                <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
+                  Type to search any US bank
+                </Typography>
+              </>
+            ) : (
+              <>
+                <InputLabel>Peer Banks (Max 3)</InputLabel>
+                <Select
+                  multiple
+                  value={selectedPeers}
+                  label="Peer Banks (Max 3)"
+                  onChange={(e) => setSelectedPeers(e.target.value.slice(0, 3))}
+                >
+                  {availableBanks.filter(bank => bank !== selectedBank).map((bank) => (
+                    <MenuItem key={bank} value={bank}>{bank}</MenuItem>
+                  ))}
+                </Select>
+                <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
+                  Select up to 3 banks for comparison
+                </Typography>
+              </>
+            )}
           </FormControl>
-          <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
-            Select up to 3 banks for comparison
-          </Typography>
         </Grid>
         <Grid item xs={12} md={2}>
           <FormControl fullWidth>

@@ -1,7 +1,12 @@
 const express = require('express');
 const cors = require('cors');
+const AWS = require('aws-sdk');
+const https = require('https');
 const { spawn } = require('child_process');
 const path = require('path');
+
+// Configure AWS SDK - will automatically use ECS task role
+AWS.config.update({ region: process.env.REGION || 'us-east-1' });
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -9,8 +14,23 @@ const PORT = process.env.PORT || 3001;
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 
+// In-memory job storage (in production, use DynamoDB or Redis)
+const jobs = new Map();
+
+// Job statuses
+const JOB_STATUS = {
+  PENDING: 'pending',
+  PROCESSING: 'processing',
+  COMPLETED: 'completed',
+  FAILED: 'failed'
+};
+
 // Health check
 app.get('/health', (req, res) => {
+  res.json({ status: 'healthy', service: 'BankIQ+ Backend' });
+});
+
+app.get('/api/health', (req, res) => {
   res.json({ status: 'healthy', service: 'BankIQ+ Backend' });
 });
 
@@ -25,48 +45,104 @@ app.post('/api/invoke-agent', async (req, res) => {
   console.log(`[${new Date().toISOString()}] Invoking agent: ${inputText.substring(0, 100)}...`);
 
   try {
-    const python = spawn('python3', [path.join(__dirname, 'invoke-agentcore.py')]);
+    // Get agent ARN from environment
+    const agentRuntimeArn = process.env.AGENTCORE_AGENT_ARN || 
+      'arn:aws:bedrock-agentcore:us-east-1:164543933824:runtime/bank_iq_agent_v1-f98stM8Sv9';
     
-    let output = '';
-    let error = '';
+    const region = process.env.REGION || 'us-east-1';
+    // Session ID must be at least 33 characters (make it 40+ to be safe)
+    const runtimeSessionId = sessionId || `session-${Date.now()}-${Math.random().toString(36).substring(2)}-${Math.random().toString(36).substring(2)}`;
     
-    python.stdout.on('data', (data) => {
-      output += data.toString();
+    // Prepare request payload
+    const payload = JSON.stringify({ prompt: inputText });
+    
+    // Build API endpoint
+    const host = `bedrock-agentcore.${region}.amazonaws.com`;
+    const path = `/runtimes/${encodeURIComponent(agentRuntimeArn)}/invocations`;
+    
+    console.log(`[${new Date().toISOString()}] Invoking AgentCore via HTTPS API...`);
+    
+    // Ensure credentials are loaded
+    await new Promise((resolve, reject) => {
+      AWS.config.getCredentials((err) => {
+        if (err) reject(err);
+        else resolve();
+      });
     });
     
-    python.stderr.on('data', (data) => {
-      error += data.toString();
-      console.error('Python stderr:', data.toString());
-    });
+    // Sign the request using AWS Signature V4
+    const endpoint = new AWS.Endpoint(host);
+    const request = new AWS.HttpRequest(endpoint, region);
     
-    python.stdin.write(JSON.stringify({
-      prompt: inputText,
-      sessionId: sessionId
-    }));
-    python.stdin.end();
+    request.method = 'POST';
+    request.path = path;
+    request.headers['Host'] = host;
+    request.headers['Content-Type'] = 'application/json';
+    request.headers['X-Amzn-Bedrock-AgentCore-Runtime-Session-Id'] = runtimeSessionId;
+    request.body = payload;
     
-    python.on('close', (code) => {
-      if (code !== 0) {
-        console.error('Python process failed:', error);
-        return res.status(500).json({ error: error || 'Failed to invoke agent' });
-      }
+    // Sign the request
+    const signer = new AWS.Signers.V4(request, 'bedrock-agentcore');
+    signer.addAuthorization(AWS.config.credentials, new Date());
+    
+    // Make HTTPS request
+    const response = await new Promise((resolve, reject) => {
+      const options = {
+        hostname: host,
+        path: request.path,
+        method: request.method,
+        headers: request.headers
+      };
       
-      try {
-        const result = JSON.parse(output);
-        console.log(`[${new Date().toISOString()}] Agent response received`);
-        res.json({ 
-          output: result.output || 'No response',
-          sessionId: result.sessionId,
-          runtime: 'AgentCore'
+      const req = https.request(options, (res) => {
+        let data = '';
+        
+        res.on('data', (chunk) => {
+          data += chunk;
         });
-      } catch (e) {
-        console.error('Failed to parse response:', e, output);
-        res.status(500).json({ error: 'Failed to parse response', details: output });
-      }
+        
+        res.on('end', () => {
+          if (res.statusCode >= 200 && res.statusCode < 300) {
+            resolve({ statusCode: res.statusCode, body: data });
+          } else {
+            reject(new Error(`HTTP ${res.statusCode}: ${data}`));
+          }
+        });
+      });
+      
+      req.on('error', reject);
+      req.write(payload);
+      req.end();
+    });
+    
+    // Parse response
+    const result = JSON.parse(response.body);
+    
+    // Extract text from nested structure: result.content[0].text or result.role/content
+    let output = 'No response';
+    if (result.content && Array.isArray(result.content) && result.content[0]?.text) {
+      output = result.content[0].text;
+    } else if (result.output) {
+      output = result.output;
+    } else if (result.response) {
+      output = result.response;
+    } else if (result.message) {
+      output = result.message;
+    }
+    
+    console.log(`[${new Date().toISOString()}] Agent response received from AgentCore`);
+    
+    res.json({
+      output: output,
+      sessionId: runtimeSessionId,
+      runtime: 'AgentCore-HTTPS-ECS'
     });
   } catch (error) {
-    console.error('Server error:', error);
-    res.status(500).json({ error: error.message });
+    console.error('Agent invocation error:', error);
+    res.status(500).json({ 
+      error: error.message,
+      code: error.code || 'Unknown'
+    });
   }
 });
 
@@ -87,7 +163,7 @@ app.post('/api/analyze-local-data', async (req, res) => {
   
   try {
     // Format the data for the agent
-    const prompt = `Analyze this peer banking data comparing ${baseBank} vs ${peerBanks.join(', ')} on metric: ${metric}. 
+    const inputText = `Analyze this peer banking data comparing ${baseBank} vs ${peerBanks.join(', ')} on metric: ${metric}. 
 
 Data summary: ${data.length} data points
 Sample: ${JSON.stringify(data.slice(0, 3))}
@@ -98,35 +174,73 @@ Provide a 2-paragraph analysis highlighting:
 
 Keep it concise and business-focused.`;
     
-    const python = spawn('python3', [path.join(__dirname, 'invoke-agentcore.py')]);
+    // Get agent ARN from environment
+    const agentRuntimeArn = process.env.AGENTCORE_AGENT_ARN || 
+      'arn:aws:bedrock-agentcore:us-east-1:164543933824:runtime/bank_iq_agent_v1-f98stM8Sv9';
     
-    let output = '';
-    let error = '';
+    const region = process.env.REGION || 'us-east-1';
+    const runtimeSessionId = `session-${Date.now()}-${Math.random().toString(36).substring(2)}-${Math.random().toString(36).substring(2)}`;
     
-    python.stdout.on('data', (d) => { output += d.toString(); });
-    python.stderr.on('data', (d) => { 
-      error += d.toString();
-      console.error('Python stderr:', d.toString());
+    const payload = JSON.stringify({ prompt: inputText });
+    const host = `bedrock-agentcore.${region}.amazonaws.com`;
+    const path = `/runtimes/${encodeURIComponent(agentRuntimeArn)}/invocations`;
+    
+    await new Promise((resolve, reject) => {
+      AWS.config.getCredentials((err) => {
+        if (err) reject(err);
+        else resolve();
+      });
     });
     
-    python.stdin.write(JSON.stringify({ prompt }));
-    python.stdin.end();
+    const endpoint = new AWS.Endpoint(host);
+    const request = new AWS.HttpRequest(endpoint, region);
     
-    python.on('close', (code) => {
-      if (code !== 0) {
-        console.error(`[${new Date().toISOString()}] Analysis failed with code ${code}:`, error);
-        return res.status(500).json({ error: error || 'Analysis failed' });
-      }
+    request.method = 'POST';
+    request.path = path;
+    request.headers['Host'] = host;
+    request.headers['Content-Type'] = 'application/json';
+    request.headers['X-Amzn-Bedrock-AgentCore-Runtime-Session-Id'] = runtimeSessionId;
+    request.body = payload;
+    
+    const signer = new AWS.Signers.V4(request, 'bedrock-agentcore');
+    signer.addAuthorization(AWS.config.credentials, new Date());
+    
+    const response = await new Promise((resolve, reject) => {
+      const options = {
+        hostname: host,
+        path: request.path,
+        method: request.method,
+        headers: request.headers
+      };
       
-      try {
-        const result = JSON.parse(output);
-        console.log(`[${new Date().toISOString()}] Analysis complete, response length: ${result.output?.length || 0}`);
-        res.json({ analysis: result.output || 'Analysis complete. The data shows performance metrics for the selected banks.' });
-      } catch (e) {
-        console.error(`[${new Date().toISOString()}] Failed to parse agent response:`, e);
-        res.status(500).json({ error: 'Failed to parse response' });
-      }
+      const req = https.request(options, (res) => {
+        let data = '';
+        res.on('data', (chunk) => { data += chunk; });
+        res.on('end', () => {
+          if (res.statusCode >= 200 && res.statusCode < 300) {
+            resolve({ statusCode: res.statusCode, body: data });
+          } else {
+            reject(new Error(`HTTP ${res.statusCode}: ${data}`));
+          }
+        });
+      });
+      
+      req.on('error', reject);
+      req.write(payload);
+      req.end();
     });
+    
+    const result = JSON.parse(response.body);
+    let output = 'No response';
+    if (result.content && Array.isArray(result.content) && result.content[0]?.text) {
+      output = result.content[0].text;
+    } else if (result.output) {
+      output = result.output;
+    }
+    
+    console.log(`[${new Date().toISOString()}] Analysis complete`);
+    res.json({ analysis: output });
+    
   } catch (error) {
     console.error(`[${new Date().toISOString()}] Analysis error:`, error);
     res.status(500).json({ error: error.message });
@@ -224,7 +338,7 @@ app.post('/api/upload-pdf', async (req, res) => {
         const pdfBuffer = Buffer.from(file.content, 'base64');
         
         await s3.putObject({
-          Bucket: 'bankiq-uploaded-docs',
+          Bucket: process.env.UPLOADED_DOCS_BUCKET || 'bankiq-uploaded-docs',
           Key: s3Key,
           Body: pdfBuffer,
           ContentType: 'application/pdf',
@@ -421,10 +535,220 @@ app.post('/api/search-banks', async (req, res) => {
   }
 });
 
+// Async job submission endpoint
+app.post('/api/jobs/submit', async (req, res) => {
+  const { inputText, sessionId, jobType } = req.body;
+
+  if (!inputText) {
+    return res.status(400).json({ error: 'Missing inputText' });
+  }
+
+  // Generate job ID
+  const jobId = `job-${Date.now()}-${Math.random().toString(36).substring(2, 10)}`;
+  
+  // Create job record
+  jobs.set(jobId, {
+    jobId,
+    status: JOB_STATUS.PENDING,
+    inputText,
+    sessionId,
+    jobType: jobType || 'agent-invocation',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  });
+
+  console.log(`[${new Date().toISOString()}] Job ${jobId} created: ${inputText.substring(0, 100)}...`);
+
+  // Start processing asynchronously (don't await)
+  processJob(jobId).catch(err => {
+    console.error(`[${new Date().toISOString()}] Job ${jobId} failed:`, err);
+    const job = jobs.get(jobId);
+    if (job) {
+      job.status = JOB_STATUS.FAILED;
+      job.error = err.message;
+      job.updatedAt = new Date().toISOString();
+    }
+  });
+
+  // Return job ID immediately
+  res.json({ jobId, status: JOB_STATUS.PENDING });
+});
+
+// Job status check endpoint
+app.get('/api/jobs/:jobId', (req, res) => {
+  const { jobId } = req.params;
+  const job = jobs.get(jobId);
+
+  if (!job) {
+    return res.status(404).json({ error: 'Job not found' });
+  }
+
+  // Return job status (without full result to keep response small)
+  res.json({
+    jobId: job.jobId,
+    status: job.status,
+    createdAt: job.createdAt,
+    updatedAt: job.updatedAt,
+    hasResult: !!job.result
+  });
+});
+
+// Job result retrieval endpoint
+app.get('/api/jobs/:jobId/result', (req, res) => {
+  const { jobId } = req.params;
+  const job = jobs.get(jobId);
+
+  if (!job) {
+    return res.status(404).json({ error: 'Job not found' });
+  }
+
+  if (job.status === JOB_STATUS.PENDING || job.status === JOB_STATUS.PROCESSING) {
+    return res.json({ 
+      jobId: job.jobId,
+      status: job.status,
+      message: 'Job still processing'
+    });
+  }
+
+  if (job.status === JOB_STATUS.FAILED) {
+    return res.status(500).json({
+      jobId: job.jobId,
+      status: job.status,
+      error: job.error
+    });
+  }
+
+  // Return full result
+  res.json({
+    jobId: job.jobId,
+    status: job.status,
+    result: job.result,
+    sessionId: job.sessionId,
+    createdAt: job.createdAt,
+    completedAt: job.updatedAt
+  });
+});
+
+// Process job asynchronously
+async function processJob(jobId) {
+  const job = jobs.get(jobId);
+  if (!job) return;
+
+  try {
+    // Update status to processing
+    job.status = JOB_STATUS.PROCESSING;
+    job.updatedAt = new Date().toISOString();
+
+    console.log(`[${new Date().toISOString()}] Processing job ${jobId}...`);
+
+    // Get agent ARN from environment
+    const agentRuntimeArn = process.env.AGENTCORE_AGENT_ARN || 
+      'arn:aws:bedrock-agentcore:us-east-1:164543933824:runtime/bank_iq_agent_v1-f98stM8Sv9';
+    
+    const region = process.env.REGION || 'us-east-1';
+    const runtimeSessionId = job.sessionId || `session-${Date.now()}-${Math.random().toString(36).substring(2)}-${Math.random().toString(36).substring(2)}`;
+    
+    const payload = JSON.stringify({ prompt: job.inputText });
+    const host = `bedrock-agentcore.${region}.amazonaws.com`;
+    const path = `/runtimes/${encodeURIComponent(agentRuntimeArn)}/invocations`;
+    
+    // Ensure credentials are loaded
+    await new Promise((resolve, reject) => {
+      AWS.config.getCredentials((err) => {
+        if (err) reject(err);
+        else resolve();
+      });
+    });
+    
+    // Sign the request
+    const endpoint = new AWS.Endpoint(host);
+    const request = new AWS.HttpRequest(endpoint, region);
+    
+    request.method = 'POST';
+    request.path = path;
+    request.headers['Host'] = host;
+    request.headers['Content-Type'] = 'application/json';
+    request.headers['X-Amzn-Bedrock-AgentCore-Runtime-Session-Id'] = runtimeSessionId;
+    request.body = payload;
+    
+    const signer = new AWS.Signers.V4(request, 'bedrock-agentcore');
+    signer.addAuthorization(AWS.config.credentials, new Date());
+    
+    // Make HTTPS request (no timeout limit)
+    const response = await new Promise((resolve, reject) => {
+      const options = {
+        hostname: host,
+        path: request.path,
+        method: request.method,
+        headers: request.headers
+      };
+      
+      const req = https.request(options, (res) => {
+        let data = '';
+        res.on('data', (chunk) => { data += chunk; });
+        res.on('end', () => {
+          if (res.statusCode >= 200 && res.statusCode < 300) {
+            resolve({ statusCode: res.statusCode, body: data });
+          } else {
+            reject(new Error(`HTTP ${res.statusCode}: ${data}`));
+          }
+        });
+      });
+      
+      req.on('error', reject);
+      req.write(payload);
+      req.end();
+    });
+    
+    // Parse response
+    const result = JSON.parse(response.body);
+    let output = 'No response';
+    if (result.content && Array.isArray(result.content) && result.content[0]?.text) {
+      output = result.content[0].text;
+    } else if (result.output) {
+      output = result.output;
+    } else if (result.response) {
+      output = result.response;
+    } else if (result.message) {
+      output = result.message;
+    }
+    
+    // Update job with result
+    job.status = JOB_STATUS.COMPLETED;
+    job.result = output;
+    job.sessionId = runtimeSessionId;
+    job.updatedAt = new Date().toISOString();
+
+    console.log(`[${new Date().toISOString()}] Job ${jobId} completed successfully`);
+
+  } catch (error) {
+    console.error(`[${new Date().toISOString()}] Job ${jobId} failed:`, error);
+    job.status = JOB_STATUS.FAILED;
+    job.error = error.message;
+    job.updatedAt = new Date().toISOString();
+  }
+}
+
+// Cleanup old jobs (run every 10 minutes)
+setInterval(() => {
+  const now = Date.now();
+  const maxAge = 30 * 60 * 1000; // 30 minutes
+  
+  for (const [jobId, job] of jobs.entries()) {
+    const jobAge = now - new Date(job.createdAt).getTime();
+    if (jobAge > maxAge) {
+      jobs.delete(jobId);
+      console.log(`[${new Date().toISOString()}] Cleaned up old job: ${jobId}`);
+    }
+  }
+}, 10 * 60 * 1000);
+
+
 app.listen(PORT, () => {
   console.log(`✅ BankIQ+ Backend running on port ${PORT}`);
   console.log(`   Health check: http://localhost:${PORT}/health`);
   console.log(`   Agent API: http://localhost:${PORT}/api/invoke-agent`);
+  console.log(`   Async Jobs: http://localhost:${PORT}/api/jobs/submit`);
   console.log(`   CSV Storage: http://localhost:${PORT}/api/store-csv-data`);
   console.log(`   CSV Analysis: http://localhost:${PORT}/api/analyze-local-data`);
   console.log(`   Bank Search: http://localhost:${PORT}/api/search-banks`);

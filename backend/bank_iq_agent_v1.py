@@ -10,8 +10,8 @@ from typing import List, Dict
 app = BedrockAgentCoreApp()
 
 # Initialize AWS clients
-bedrock = boto3.client('bedrock-runtime')
-s3 = boto3.client('s3')
+bedrock = boto3.client('bedrock-runtime', region_name='us-east-1')
+s3 = boto3.client('s3', region_name='us-east-1')
 
 # ============================================================================
 # BANKING DATA TOOLS
@@ -40,6 +40,48 @@ def get_fdic_data() -> str:
         return json.dumps({"success": False, "error": str(e)})
 
 @tool
+def search_fdic_bank(bank_name: str) -> str:
+    """Search FDIC database for bank CERT number by name.
+    
+    Args:
+        bank_name: Bank name to search for (e.g., "Regions Financial", "JPMorgan")
+    
+    Returns CERT number and official name of the largest matching bank.
+    Use this to find CERT numbers for banks not in the hardcoded list."""
+    try:
+        # Clean bank name - remove common suffixes
+        clean_name = bank_name.upper()
+        for suffix in [' CORP', ' INC', ' & CO', ' FINANCIAL', ' BANCORP', ' BANK']:
+            clean_name = clean_name.replace(suffix, '')
+        clean_name = clean_name.strip()
+        
+        # Try multiple search strategies
+        search_terms = [clean_name, bank_name.split()[0]]
+        
+        for term in search_terms:
+            url = f"https://api.fdic.gov/banks/institutions?search=NAME:{term}&fields=CERT,NAME,ASSET,ACTIVE&limit=50&format=json"
+            response = requests.get(url, timeout=10)
+            if response.status_code == 200:
+                data = response.json().get("data", [])
+                if data:
+                    # Filter active banks only
+                    active_banks = [b for b in data if b['data'].get('ACTIVE', 1) == 1]
+                    if active_banks:
+                        # Sort by asset size, return largest
+                        sorted_banks = sorted(active_banks, key=lambda x: float(x['data'].get('ASSET', 0) or 0), reverse=True)
+                        top_bank = sorted_banks[0]['data']
+                        return json.dumps({
+                            "success": True,
+                            "cert": str(top_bank['CERT']),
+                            "name": top_bank['NAME'],
+                            "asset": top_bank.get('ASSET', 0)
+                        })
+        
+        return json.dumps({"success": False, "error": f"Bank not found: {bank_name}"})
+    except Exception as e:
+        return json.dumps({"success": False, "error": str(e)})
+
+@tool
 def compare_banks(base_bank: str, peer_banks: List[str], metric: str) -> str:
     """Compare banking performance metrics across multiple banks.
     
@@ -51,60 +93,142 @@ def compare_banks(base_bank: str, peer_banks: List[str], metric: str) -> str:
     Returns detailed comparison with quarterly trends and AI analysis.
     Use this when user wants peer comparison or competitive analysis."""
     
-    # Realistic banking data
-    bank_data = {
-        "JPMorgan Chase": {"ROA": 1.35, "ROE": 15.2, "NIM": 2.8, "Tier1": 13.5},
-        "Bank of America": {"ROA": 1.28, "ROE": 14.1, "NIM": 2.6, "Tier1": 12.8},
-        "Wells Fargo": {"ROA": 1.22, "ROE": 13.5, "NIM": 2.9, "Tier1": 11.9},
-        "Citigroup": {"ROA": 1.18, "ROE": 12.8, "NIM": 2.7, "Tier1": 13.1},
-        "Goldman Sachs": {"ROA": 1.15, "ROE": 11.5, "NIM": 1.8, "Tier1": 14.2},
-        "Morgan Stanley": {"ROA": 1.12, "ROE": 11.2, "NIM": 1.9, "Tier1": 15.1}
+    # Bank CERT numbers cache (fallback if search fails)
+    bank_certs_cache = {
+        "JPMorgan Chase": "628", "JPMORGAN CHASE BANK": "628",
+        "Bank of America": "3510", "BANK OF AMERICA": "3510",
+        "Wells Fargo": "3511", "WELLS FARGO BANK": "3511",
+        "Citigroup": "7213", "CITIBANK": "7213",
+        "Goldman Sachs": "33124", "GOLDMAN SACHS BANK": "33124",
+        "Morgan Stanley": "65012",
+        "U.S. Bancorp": "6548", "U.S. BANK": "6548",
+        "PNC Financial": "6384", "PNC BANK": "6384",
+        "Capital One": "4297", "CAPITAL ONE": "4297",
+        "Truist Financial": "14291", "TRUIST BANK": "14291",
+        "Regions Financial": "12368", "REGIONS FINANCIAL CORP": "12368",
+        "Fifth Third Bancorp": "6672", "FIFTH THIRD BANCORP": "6672"
     }
     
-    quarters = ["2023-Q1", "2023-Q2", "2023-Q3", "2023-Q4", "2024-Q1", "2024-Q2", "2024-Q3"]
-    chart_data = []
+    # Helper function to get CERT (try cache first, then search)
+    def get_cert(bank_name):
+        # Try exact match in cache
+        if bank_name in bank_certs_cache:
+            return bank_certs_cache[bank_name]
+        
+        # Try partial match in cache
+        bank_upper = bank_name.upper()
+        for cached_name, cert in bank_certs_cache.items():
+            if cached_name.upper() in bank_upper or bank_upper in cached_name.upper():
+                return cert
+        
+        # Try dynamic FDIC search
+        try:
+            search_result = search_fdic_bank(bank_name)
+            result = json.loads(search_result)
+            if result.get('success'):
+                cert = result['cert']
+                # Cache for future use
+                bank_certs_cache[bank_name] = cert
+                return cert
+        except Exception as e:
+            print(f"CERT search failed for {bank_name}: {e}")
+        
+        return None
     
-    # Clean metric name
+    bank_certs = {}
+    
     metric_key = metric.replace("[Q] ", "").replace("[M] ", "")
-    for key in ["ROA", "ROE", "NIM", "Tier1"]:
+    
+    # Map metric names to FDIC fields or calculations
+    metric_map = {
+        "ROA": "ROA",
+        "ROE": "ROE", 
+        "NIM": "NIMY",
+        "Efficiency Ratio": "CALC_EFFICIENCY",
+        "Loan-to-Deposit": "CALC_LTD",
+        "Equity Ratio": "CALC_EQUITY",
+        "CRE Concentration": "NCRER"
+    }
+    
+    for key, field in metric_map.items():
         if key.lower() in metric_key.lower():
-            metric_key = key
+            metric_key = field
             break
     
-    # Generate quarterly data
+    chart_data = []
     all_banks = [base_bank] + peer_banks
+    bank_latest = {}
+    
     for bank in all_banks:
-        profile = bank_data.get(bank, {"ROA": 1.2, "ROE": 13.0, "NIM": 2.5, "Tier1": 12.0})
-        base_val = profile.get(metric_key, 1.2)
-        
-        for i, quarter in enumerate(quarters):
-            seasonal = 0.02 * (i % 4 - 1.5)
-            trend = i * 0.01
-            value = round(base_val + seasonal + trend, 2)
-            chart_data.append({
-                "Bank": bank,
-                "Quarter": quarter,
-                "Metric": metric,
-                "Value": value
-            })
+        cert = get_cert(bank)
+        if not cert:
+            continue
+            
+        try:
+            url = f"https://api.fdic.gov/banks/financials?filters=CERT:{cert}&fields=ASSET,ROA,ROE,NIMY,EQTOT,DEP,LNLSNET,EINTEXP,NONII,NCRER&limit=200&format=json"
+            response = requests.get(url, timeout=10)
+            if response.status_code != 200:
+                continue
+                
+            data = response.json().get("data", [])
+            recent = [x for x in data if any(y in x['data']['ID'] for y in ['2023', '2024', '2025'])]
+            recent.sort(key=lambda x: x['data']['ID'], reverse=True)
+            
+            for record in recent[:8]:
+                date_str = record['data']['ID'].split('_')[1]
+                year, month = date_str[:4], date_str[4:6]
+                quarter = f"{year}-Q{(int(month)-1)//3 + 1}"
+                
+                # Calculate metric value
+                if metric_key == "CALC_EFFICIENCY":
+                    nonii = record['data'].get('NONII', 0)
+                    eintexp = record['data'].get('EINTEXP', 0)
+                    nimy = record['data'].get('NIMY', 0)
+                    asset = record['data'].get('ASSET', 1)
+                    revenue = (nimy * asset / 100) if asset > 0 else 0
+                    value = (abs(nonii) / revenue * 100) if revenue > 0 else 0
+                elif metric_key == "CALC_LTD":
+                    lnlsnet = record['data'].get('LNLSNET', 0)
+                    dep = record['data'].get('DEP', 1)
+                    value = (lnlsnet / dep * 100) if dep > 0 else 0
+                elif metric_key == "CALC_EQUITY":
+                    eqtot = record['data'].get('EQTOT', 0)
+                    asset = record['data'].get('ASSET', 1)
+                    value = (eqtot / asset * 100) if asset > 0 else 0
+                else:
+                    value = record['data'].get(metric_key, 0)
+                
+                chart_data.append({
+                    "Bank": bank,
+                    "Quarter": quarter,
+                    "Metric": metric.replace("[Q] ", "").replace("[M] ", ""),
+                    "Value": round(float(value), 2)
+                })
+                
+                if bank not in bank_latest:
+                    bank_latest[bank] = float(value)
+        except:
+            continue
     
-    # Generate analysis
-    bank_values = [(bank, bank_data.get(bank, {"ROA": 1.2}).get(metric_key, 1.2)) for bank in all_banks]
-    bank_values.sort(key=lambda x: x[1], reverse=True)
-    best_bank, best_value = bank_values[0]
-    worst_bank, worst_value = bank_values[-1]
+    chart_data.sort(key=lambda x: x['Quarter'])
     
-    analysis = f"{best_bank} leads with {metric_key} of {best_value:.2f}%, showing superior performance. "
-    analysis += f"The {best_value - worst_value:.2f}pp spread to {worst_bank} ({worst_value:.2f}%) indicates "
-    analysis += f"meaningful differentiation. {base_bank} is positioned "
-    analysis += f"{'at the top' if base_bank == best_bank else 'competitively'} within this peer group."
+    if bank_latest:
+        sorted_banks = sorted(bank_latest.items(), key=lambda x: x[1], reverse=True)
+        best_bank, best_value = sorted_banks[0]
+        worst_bank, worst_value = sorted_banks[-1]
+        analysis = f"{best_bank} leads with {metric_key} of {best_value:.2f}%, showing superior performance. "
+        analysis += f"The {best_value - worst_value:.2f}pp spread to {worst_bank} ({worst_value:.2f}%) indicates "
+        analysis += f"meaningful differentiation. {base_bank} is positioned "
+        analysis += f"{'at the top' if base_bank == best_bank else 'competitively'} within this peer group."
+    else:
+        analysis = f"Comparison of {metric_key} across selected banks."
     
     return json.dumps({
         "data": chart_data,
         "base_bank": base_bank,
         "peer_banks": peer_banks,
         "analysis": analysis,
-        "source": "Banking_Performance_Data"
+        "source": "FDIC_Real_Data"
     })
 
 @tool
@@ -584,7 +708,7 @@ def analyze_uploaded_pdf(s3_key: str, bank_name: str, analysis_type: str = "comp
     
     try:
         # Get PDF from S3
-        response = s3.get_object(Bucket="bankiq-uploaded-docs", Key=s3_key)
+        response = s3.get_object(Bucket="bankiq-uploaded-docs-prod", Key=s3_key)
         pdf_bytes = response['Body'].read()
         
         # Extract text from PDF (first 50 pages for analysis)
@@ -726,6 +850,7 @@ agent = Agent(
     model=model,
     tools=[
         get_fdic_data,
+        search_fdic_bank,
         compare_banks,
         get_sec_filings,
         generate_bank_report,

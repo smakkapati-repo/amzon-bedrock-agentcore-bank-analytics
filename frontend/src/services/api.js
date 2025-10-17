@@ -1,5 +1,7 @@
-// Use environment variable or default to localhost
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || 'http://localhost:3001';
+import { API_URL } from '../config';
+
+// Use CloudFront URL for production
+const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || API_URL;
 
 async function callBackend(inputText) {
   const response = await fetch(`${BACKEND_URL}/api/invoke-agent`, {
@@ -102,16 +104,20 @@ export const api = {
 
   async analyzePeers(baseBank, peerBanks, metric) {
     const prompt = `Compare ${baseBank} vs ${peerBanks.join(', ')} using ${metric}`;
-    const response = await callBackend(prompt);
+    
+    // Use async job pattern
+    const job = await this.submitJob(prompt);
+    const result = await this.pollJobUntilComplete(job.jobId);
+    const response = result.result;
     
     // The agent returns data in format: "DATA: {...json...}\n\nAnalysis text"
     try {
-      // Look for DATA: prefix
-      const dataMatch = response.match(/DATA:\s*(\{[\s\S]*?\})\s*\n/);
+      // Look for DATA: prefix - handle both regular and escaped JSON
+      const dataMatch = response.match(/DATA:\s*(\{[\s\S]*?\})(?:\s*\n|##)/);
       if (dataMatch) {
         const parsed = JSON.parse(dataMatch[1]);
         // Remove the DATA: line from analysis
-        const analysisText = response.replace(/DATA:[\s\S]*?\}\s*\n/, '').trim();
+        const analysisText = response.replace(/DATA:[\s\S]*?\}(?:\s*\n|##)/, '').trim();
         
         return { 
           success: true, 
@@ -179,6 +185,57 @@ export const api = {
     return callBackend(`Generate comprehensive financial report for ${bankName}`);
   },
 
+  // Async job methods
+  async submitJob(inputText, jobType = 'agent-invocation') {
+    const response = await fetch(`${BACKEND_URL}/api/jobs/submit`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ inputText, jobType })
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Job submission failed: ${response.status}`);
+    }
+    
+    return response.json();
+  },
+
+  async checkJobStatus(jobId) {
+    const response = await fetch(`${BACKEND_URL}/api/jobs/${jobId}`);
+    
+    if (!response.ok) {
+      throw new Error(`Job status check failed: ${response.status}`);
+    }
+    
+    return response.json();
+  },
+
+  async getJobResult(jobId) {
+    const response = await fetch(`${BACKEND_URL}/api/jobs/${jobId}/result`);
+    
+    if (!response.ok) {
+      throw new Error(`Job result retrieval failed: ${response.status}`);
+    }
+    
+    return response.json();
+  },
+
+  // Poll for job completion
+  async pollJobUntilComplete(jobId, maxAttempts = 120, intervalMs = 2000) {
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      const status = await this.checkJobStatus(jobId);
+      
+      if (status.status === 'completed' || status.status === 'failed') {
+        return this.getJobResult(jobId);
+      }
+      
+      // Wait before next poll
+      await new Promise(resolve => setTimeout(resolve, intervalMs));
+    }
+    
+    throw new Error('Job polling timeout');
+  },
+
   async searchBanks(query) {
     // Use direct backend endpoint for faster, more reliable search
     try {
@@ -220,5 +277,42 @@ export const api = {
     }
     
     return response.json();
+  },
+
+  // Streaming method
+  async callAgentStream(inputText, onChunk, onComplete, onError) {
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/invoke-agent-stream`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ inputText })
+      });
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const chunk = decoder.decode(value);
+        const lines = chunk.split('\n');
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            const data = JSON.parse(line.slice(6));
+            if (data.chunk) {
+              onChunk(data.chunk);
+            } else if (data.done) {
+              onComplete();
+            } else if (data.error) {
+              onError(data.error);
+            }
+          }
+        }
+      }
+    } catch (error) {
+      onError(error.message);
+    }
   }
 };

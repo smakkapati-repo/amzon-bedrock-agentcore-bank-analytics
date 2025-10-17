@@ -1,164 +1,169 @@
-# BankIQ+ - AI-Powered Banking Analytics Platform
+# BankIQ+ - AI Banking Analytics Platform
 
-> **AWS Bedrock AgentCore** implementation with **Strands framework** for intelligent banking analytics
+> AWS Bedrock AgentCore + Strands framework for intelligent banking analytics
 
 ## 🚀 Quick Start
 
 ```bash
-# 1. Deploy agent to AgentCore
-cd backend
-agentcore configure -e banking_agent_simple.py
-agentcore launch
+# Deploy to AWS
+./cfn/scripts/deploy-all.sh
 
-# 2. Start the application
-cd ..
-./scripts/start-dev.sh
+# Access at CloudFront URL (output after deployment)
 ```
-
-Open http://localhost:3000
 
 ## 📁 Project Structure
 
 ```
 peer-bank-analytics-agentic/
-├── backend/                    # Agent & API Server
-│   ├── banking_agent_simple.py # Strands agent (10 tools)
-│   ├── server.js              # Express backend
-│   ├── invoke-agentcore.py    # Python bridge
-│   └── .bedrock_agentcore.yaml # Agent config
-├── frontend/                   # React UI
-│   ├── src/components/        # UI components
-│   │   ├── PeerAnalytics.js   # Bank comparison
-│   │   └── FinancialReports.js # SEC filings & chat
-│   └── src/services/api.js    # Backend API calls
-├── scripts/                    # Utility scripts
-│   ├── start-dev.sh           # Start everything
-│   ├── start-frontend.sh      # Frontend only
-│   ├── test-local.sh          # Test setup
-│   └── deploy-complete.sh     # Production deploy
-├── deployment/                 # Deployment configs
-│   └── bank-iq-plus-fargate.yaml # Fargate CloudFormation
-├── docs/                       # Documentation
-│   ├── SETUP.md               # Setup guide
-│   ├── QUICK_START.md         # 3-step guide
-│   ├── DEPLOY_SIMPLE.md       # Deployment guide
-│   ├── CHECKLIST.md           # Verification
-│   ├── AGENT_TOOLS_UPDATED.md # Tool docs
-│   └── SUMMARY.md             # Overview
-└── README.md                   # This file
+├── backend/
+│   ├── bank_iq_agent_v1.py      # Strands agent (12 tools)
+│   ├── server.js                # Express API server
+│   ├── Dockerfile               # Agent container
+│   └── Dockerfile.backend       # Backend container
+├── frontend/
+│   └── src/                     # React UI
+├── cfn/
+│   ├── templates/               # CloudFormation templates
+│   └── scripts/                 # Deployment scripts
+├── arch/
+│   └── banking_architecture_diagram.py  # Architecture diagram
+└── DEPLOYMENT_GUIDE.md          # Complete deployment guide
 ```
 
 ## ✨ Features
 
-### Peer Bank Analytics
-- **Live Data**: Real-time FDIC banking metrics
-- **Upload CSV**: Custom data analysis
-- **AI Insights**: Claude-powered analysis
-- **Interactive Charts**: Performance visualization
+- **Peer Bank Analytics** - FDIC data comparison
+- **Financial Reports** - SEC filings analysis
+- **CSV Upload** - Custom data analysis
+- **Document Chat** - AI-powered Q&A
 
-### Financial Reports
-- **Live EDGAR**: Real-time SEC filings
-- **Document Upload**: Analyze your own reports
-- **AI Chat**: Ask questions about documents
-- **Comprehensive Reports**: Full bank analysis
+## 🏗️ Architecture
+
+```
+User (HTTPS) → CloudFront → ALB (HTTP) → ECS Fargate → AgentCore
+                    ↓
+                S3 (React App)
+```
+
+**Key Points:**
+- No API Gateway (no 30-sec timeout!)
+- CloudFront → ALB uses HTTP (secure within AWS)
+- 300-second timeout for long queries
+- Auto-scaling ECS Fargate
 
 ## 🛠️ Technology Stack
 
-- **AI**: AWS Bedrock AgentCore + Claude Sonnet 4.5
-- **Agent Framework**: Strands
-- **Backend**: Express.js + Python bridge
+- **AI**: AWS Bedrock AgentCore + Claude Sonnet 4
+- **Agent**: Strands framework
+- **Backend**: Express.js + Python
 - **Frontend**: React + Material-UI
-- **Data**: FDIC API, SEC EDGAR API
-- **Deployment**: ECS Fargate (optional)
+- **Infrastructure**: ECS Fargate, ALB, CloudFront, S3
 
 ## 📖 Documentation
 
-- **[SETUP.md](docs/SETUP.md)** - Quick setup guide
-- **[QUICK_START.md](docs/QUICK_START.md)** - 3-step guide
-- **[DEPLOY_SIMPLE.md](docs/DEPLOY_SIMPLE.md)** - Detailed deployment
-- **[CHECKLIST.md](docs/CHECKLIST.md)** - Verification steps
-- **[AGENT_TOOLS_UPDATED.md](docs/AGENT_TOOLS_UPDATED.md)** - Tool documentation
+- **[DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md)** - Complete deployment guide
+- **[backend/README_AGENT.md](backend/README_AGENT.md)** - Agent documentation
+- **[arch/](arch/)** - Architecture diagrams
 
-## 🎯 Agent Tools (10 total)
+## 🎯 Agent Tools (12 total)
 
-1. **get_fdic_data** - Current FDIC banking data
-2. **compare_banks** - Peer performance comparison
-3. **get_sec_filings** - SEC EDGAR filings
-4. **generate_bank_report** - Comprehensive analysis
-5. **answer_banking_question** - General Q&A
-6. **search_banks** - Bank search by name/ticker
-7. **upload_csv_to_s3** - Upload CSV data
-8. **analyze_csv_peer_performance** - Analyze CSV
-9. **upload_document_to_s3** - Upload documents
-10. **chat_with_documents** - Chat with docs/filings
+1. `get_fdic_data` - Current FDIC banking data
+2. `search_fdic_bank` - Search FDIC by bank name
+3. `compare_banks` - Peer performance comparison
+4. `get_sec_filings` - SEC EDGAR filings
+5. `generate_bank_report` - Comprehensive analysis
+6. `answer_banking_question` - General Q&A
+7. `search_banks` - Bank search by name/ticker
+8. `upload_csv_to_s3` - Upload CSV data
+9. `analyze_csv_peer_performance` - Analyze CSV
+10. `analyze_and_upload_pdf` - Upload and analyze PDFs
+11. `analyze_uploaded_pdf` - Analyze PDFs in S3
+12. `chat_with_documents` - Chat with docs/filings
 
-## 🔧 Development
+## ⚠️ CRITICAL: Dockerfile Naming
 
-### Prerequisites
+**Two separate Dockerfiles:**
+- `backend/Dockerfile` = Python agent (AgentCore) - DO NOT RENAME
+- `backend/Dockerfile.backend` = Node.js API server (ECS)
+
+See `backend/README_AGENT.md` for details.
+
+## 🔧 Prerequisites
+
 - AWS Account with Bedrock access
-- Node.js 18+
-- Python 3.9+
 - AWS CLI configured
+- Docker installed
+- Node.js 18+
+- Python 3.11+
 
-### Local Development
-```bash
-# Backend
-cd backend
-npm install
-npm start
-
-# Frontend (new terminal)
-cd frontend
-npm install
-npm start
-```
-
-### Testing
-```bash
-./scripts/test-local.sh
-```
-
-## 🚀 Production Deployment
+## 🚀 Deployment
 
 ```bash
-./scripts/deploy-complete.sh
+# One command deployment
+./cfn/scripts/deploy-all.sh
 ```
 
-Or use Fargate CloudFormation:
-```bash
-aws cloudformation create-stack \
-  --stack-name bankiq-plus \
-  --template-body file://deployment/bank-iq-plus-fargate.yaml \
-  --parameters ParameterKey=YourIPAddress,ParameterValue=$(curl -s https://checkip.amazonaws.com)
-```
+**Time**: ~15-20 minutes
+
+**What gets deployed:**
+- ECS Fargate cluster with ALB
+- CloudFront distribution with S3
+- Docker image to ECR
+- React app to S3
 
 ## 💰 Cost Estimate
 
-- **Local Development**: FREE (only AgentCore API calls)
-- **AgentCore**: ~$0.01-0.10 per 1K invocations
-- **Claude API**: ~$0.003 per 1K input tokens
-- **Production (Fargate)**: ~$15-30/month
+Monthly costs (24/7 operation):
+- ECS Fargate: $15-20
+- ALB: $16-20
+- CloudFront: $1-5
+- S3: $1-2
+- Bedrock: $10-30
 
-## 🤝 Contributing
+**Total**: ~$50-90/month
 
-1. Fork the repository
-2. Create feature branch
-3. Commit changes
-4. Push to branch
-5. Open Pull Request
+## 🔄 Update Deployment
+
+### Update Backend
+```bash
+cd backend
+docker build -f Dockerfile.backend -t bankiq-backend .
+# Push to ECR (see DEPLOYMENT_GUIDE.md)
+```
+
+### Update Frontend
+```bash
+cd frontend
+npm run build
+aws s3 sync build/ s3://BUCKET_NAME/ --delete
+aws cloudfront create-invalidation --distribution-id DIST_ID --paths "/*"
+```
+
+## 📝 Monitoring
+
+```bash
+# View ECS logs
+aws logs tail /ecs/bankiq-backend --follow
+
+# View AgentCore logs
+agentcore status
+```
+
+## 🆘 Troubleshooting
+
+**Issue**: CloudFront returns 502
+- Check ECS task health
+- Check ALB target health
+- View logs: `aws logs tail /ecs/bankiq-backend --follow`
+
+**Issue**: Agent not responding
+- Check AgentCore status: `agentcore status`
+- Verify agent ARN in ECS task environment variables
 
 ## 📄 License
 
-MIT License - see LICENSE file
+MIT License
 
-## 🆘 Support
+## 👥 Authors
 
-- Check agent logs: `agentcore logs --follow`
-- Check backend logs: Terminal where `npm start` runs
-- Review documentation in `docs/` folder
-
----
-
-**Built with ❤️ for the financial services community**
-
-Authors: Shashi Makkapati, Senthil Kamala Rathinam, Jacob Scheatzle
+Shashi Makkapati, Senthil Kamala Rathinam, Jacob Scheatzle

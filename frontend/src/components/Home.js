@@ -18,22 +18,22 @@ function Home() {
     {
       icon: <AssessmentIcon sx={{ fontSize: 48, color: 'primary.main' }} />,
       title: 'Smart Tool Selection',
-      description: 'Agent automatically picks from 5 banking tools: FDIC data, peer comparison, SEC filings, reports, Q&A',
+      description: 'Agent automatically picks from 12 banking tools: FDIC data, peer comparison, SEC filings, reports, document analysis, and more',
       status: 'AI-Powered'
     },
     {
       icon: <TrendingUpIcon sx={{ fontSize: 48, color: 'primary.main' }} />,
-      title: 'Easy Development',
-      description: 'Express backend with Python bridge - no Lambda complexity. Test locally, deploy when ready.',
-      status: 'Developer-Friendly'
+      title: 'Production Ready',
+      description: 'ECS Fargate deployment with ALB - no timeouts, auto-scaling, and enterprise-grade reliability.',
+      status: 'Cloud-Native'
     }
   ];
 
   const stats = [
-    { label: 'Banks Analyzed', value: '10+', color: '#00778f' },
+    { label: 'Banks Available', value: '500+', color: '#00778f' },
     { label: 'Metrics Tracked', value: '6+', color: '#00a897' },
-    { label: 'Analysis Modes', value: '2', color: '#02c59b' },
-    { label: 'AI Models', value: '2', color: '#A020F0' }
+    { label: 'Data Sources', value: '3', color: '#02c59b' },
+    { label: 'AI Tools', value: '12', color: '#A020F0' }
   ];
 
   return (
@@ -68,7 +68,7 @@ function Home() {
               }} 
             />
             <Chip 
-              label="Express + Python Bridge" 
+              label="Claude Sonnet 4.5" 
               sx={{ 
                 backgroundColor: 'rgba(255,255,255,0.2)', 
                 color: 'white',
@@ -97,7 +97,7 @@ function Home() {
 
       {/* Features Section */}
       <Typography variant="h5" gutterBottom sx={{ mb: 2, fontWeight: 600 }}>
-        Platform Features
+        Key Features
       </Typography>
       
       <Grid container spacing={2}>
@@ -142,7 +142,7 @@ function Home() {
           Technology Stack
         </Typography>
         <Grid container spacing={1} justifyContent="center">
-          {['AWS Bedrock AgentCore', 'Claude Sonnet 4.5', 'Strands Framework', 'Express.js', 'Python Bridge', 'FDIC API', 'SEC EDGAR', 'React', 'Material-UI'].map((tech) => (
+          {['AWS Bedrock AgentCore', 'Claude Sonnet 4.5', 'Strands Framework', 'Express.js', 'ECS Fargate', 'FDIC API', 'SEC EDGAR', 'React', 'Material-UI'].map((tech) => (
             <Grid item key={tech}>
               <Chip 
                 label={tech} 

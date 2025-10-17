@@ -23,6 +23,7 @@ function FinancialReports() {
   const [error, setError] = useState('');
   const [fullReport, setFullReport] = useState('');
   const [reportLoading, setReportLoading] = useState(false);
+  const [pollingStatus, setPollingStatus] = useState('');
   const [mode, setMode] = useState('live'); // 'live' or 'local'
   const [uploadedFiles, setUploadedFiles] = useState([]);
   const [analyzedDocs, setAnalyzedDocs] = useState([]);
@@ -121,40 +122,50 @@ function FinancialReports() {
       setFullReport('');
       setError('');
       
-      let report;
+      let inputText;
       if (mode === 'local' && analyzedDocs.length > 0) {
-        // For local mode, use the uploaded PDF from S3
         const doc = analyzedDocs[0];
-        
         if (doc.s3_key) {
-          // Document is in S3, agent can analyze it
-          report = await api.generateFullReport(
-            `Use the analyze_uploaded_pdf tool to generate a comprehensive financial analysis report. ` +
-            `S3 key: ${doc.s3_key}, Bank: ${doc.bank_name}, Analysis type: comprehensive`,
-            reports
-          );
+          inputText = `Use the analyze_uploaded_pdf tool to generate a comprehensive financial analysis report. ` +
+            `S3 key: ${doc.s3_key}, Bank: ${doc.bank_name}, Analysis type: comprehensive`;
         } else {
-          // Fallback if S3 upload failed
-          report = await api.generateFullReport(
-            `Generate a comprehensive financial analysis report for ${selectedBank} based on their ${doc.form_type} filing for fiscal year ${doc.year}. ` +
-            `Use publicly available data and SEC filings.`,
-            reports
-          );
+          inputText = `Generate a comprehensive financial analysis report for ${selectedBank} based on their ${doc.form_type} filing for fiscal year ${doc.year}. ` +
+            `Use publicly available data and SEC filings.`;
         }
       } else {
-        report = await api.generateFullReport(selectedBank, reports);
+        inputText = `Generate comprehensive financial report for ${selectedBank}`;
       }
       
-      // Remove DATA: line from report display (it's for parsing only)
-      let cleanReport = report;
+      // Submit async job
+      console.log('Submitting async job for full report...');
+      setPollingStatus('Submitting request...');
+      const jobSubmission = await api.submitJob(inputText, 'full-report');
+      const jobId = jobSubmission.jobId;
+      
+      console.log(`Job ${jobId} submitted, polling for completion...`);
+      setPollingStatus('Generating report (this may take 1-2 minutes)...');
+      
+      // Poll for completion (max 4 minutes = 120 attempts * 2 seconds)
+      const result = await api.pollJobUntilComplete(jobId, 120, 2000);
+      
+      if (result.status === 'failed') {
+        throw new Error(result.error || 'Job failed');
+      }
+      
+      // Remove DATA: line from report display
+      let cleanReport = result.result;
       if (cleanReport.includes('DATA:')) {
         cleanReport = cleanReport.replace(/DATA:\s*\{[\s\S]*?\}\s*\n+/g, '').trim();
       }
       
       setFullReport(cleanReport);
+      setPollingStatus('');
+      console.log('Full report generated successfully');
       
     } catch (err) {
-      setError('Failed to generate full report');
+      console.error('Full report generation error:', err);
+      setError('Failed to generate full report: ' + err.message);
+      setPollingStatus('');
     } finally {
       setReportLoading(false);
     }
@@ -596,7 +607,7 @@ function FinancialReports() {
                   </Button>
                 </Box>
                 
-                <Box sx={{ display: 'flex', gap: 1 }}>
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
                   <Button 
                     variant="contained" 
                     fullWidth
@@ -606,6 +617,11 @@ function FinancialReports() {
                   >
                     {reportLoading ? <CircularProgress size={20} sx={{ mr: 1 }} /> : '🚀'} Generate Full Analysis
                   </Button>
+                  {pollingStatus && (
+                    <Typography variant="caption" sx={{ color: '#A020F0', textAlign: 'center', fontStyle: 'italic' }}>
+                      {pollingStatus}
+                    </Typography>
+                  )}
                 </Box>
               </CardContent>
             </Card>

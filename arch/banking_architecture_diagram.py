@@ -1,6 +1,6 @@
 from diagrams import Diagram, Cluster, Edge
-from diagrams.aws.compute import ECS, Fargate, ECR, Lambda
-from diagrams.aws.network import InternetGateway, ElasticLoadBalancing, VPC, APIGateway, NATGateway
+from diagrams.aws.compute import ECS, Fargate, ECR
+from diagrams.aws.network import InternetGateway, ElasticLoadBalancing, VPC, CloudFront
 from diagrams.aws.storage import S3
 from diagrams.aws.ml import Bedrock
 from diagrams.aws.management import Cloudwatch
@@ -8,7 +8,6 @@ from diagrams.aws.security import IAM
 from diagrams.aws.general import User
 from diagrams.onprem.client import Users as ExternalUsers
 from diagrams.onprem.compute import Server
-from diagrams.programming.language import Python, Javascript
 
 # AWS-style professional configuration
 graph_attr = {
@@ -37,7 +36,7 @@ edge_attr = {
 }
 
 with Diagram(
-    "BankIQ+ AgentCore Platform - AWS Architecture",
+    "BankIQ+ Production Architecture - CloudFront + ECS + AgentCore",
     show=False,
     direction="LR",
     graph_attr=graph_attr,
@@ -52,47 +51,41 @@ with Diagram(
         
         fdic_api - sec_api
     
-    with Cluster("Users", graph_attr={"bgcolor": "white", "style": "rounded"}):
-        users = ExternalUsers("Banking Analysts\n& Executives")
-        admin_users = User("Platform\nAdministrators")
+    users = ExternalUsers("Banking Analysts\n& Executives")
     
 
     
     with Cluster("AWS Cloud - BankIQ+ Platform", graph_attr={"bgcolor": "white", "style": "rounded", "color": "#232F3E"}):
         
+        # CloudFront CDN
+        cloudfront = CloudFront("CloudFront CDN\n300s Timeout")
+        
+        # Frontend Storage
+        with Cluster("Frontend", graph_attr={"bgcolor": "white", "style": "rounded"}):
+            s3_frontend = S3("S3 Bucket\nReact App (Static)")
+        
         # VPC
         with Cluster("VPC - Multi-AZ", graph_attr={"bgcolor": "white", "style": "rounded"}):
             
-            igw = InternetGateway("Internet Gateway")
-            
             # Public Subnets
             with Cluster("Public Subnets", graph_attr={"bgcolor": "white", "style": "rounded"}):
-                alb = ElasticLoadBalancing("Application\nLoad Balancer")
-                nat_gw = NATGateway("NAT Gateway")
+                alb = ElasticLoadBalancing("Application\nLoad Balancer\n300s Timeout")
             
             # Private Subnets
-            with Cluster("Private Subnets", graph_attr={"bgcolor": "white", "style": "rounded"}):
-                ui_fargate = Fargate("UI Container\nReact + Nginx")
-                
-            # NAT Gateway connection
-            ui_fargate >> Edge(label="Internet Access", color="#9E9E9E", style="dashed") >> nat_gw
-            
-            # API Layer
-            with Cluster("API Integration", graph_attr={"bgcolor": "white", "style": "rounded"}):
-                api_gw = APIGateway("API Gateway")
-                lambda_proxy = Lambda("Lambda Proxy\nAgentCore Integration")
+            with Cluster("Private Subnets - ECS Fargate", graph_attr={"bgcolor": "white", "style": "rounded"}):
+                ecs_backend = Fargate("Backend Container\nNode.js Express\n12 AI Tools")
             
             # Data Services
             with Cluster("Storage", graph_attr={"bgcolor": "white", "style": "rounded"}):
-                s3_bucket = S3("S3 Bucket\nDocument Uploads")
+                s3_docs = S3("S3 Bucket\nUploaded Documents")
         
-        # AgentCore Runtime (External)
+        # AgentCore Runtime
         with Cluster("Bedrock AgentCore", graph_attr={"bgcolor": "white", "style": "rounded"}):
-            agentcore = Bedrock("AgentCore Runtime\nBanking Strands Agent")
-            claude = Bedrock("Claude Sonnet 4.5\nAI Analysis")
+            agentcore = Bedrock("AgentCore Runtime\nbank_iq_agent_v1\n12 Tools + Memory")
+            claude = Bedrock("Claude Sonnet 4.5\nConversational AI")
             
         # Container Registry
-        ecr_repo = ECR("ECR Repository\nUI Container")
+        ecr_repo = ECR("ECR Repository\nBackend Image")
         
         # Management & Security
         with Cluster("Management & Security", graph_attr={"bgcolor": "white", "style": "rounded"}):
@@ -101,35 +94,36 @@ with Diagram(
             
             cloudwatch - iam
     
-    # Step 1: User Access
-    users >> Edge(label="1. HTTPS Request\n(IP Restricted)", color="#FF9900", style="bold") >> igw >> alb
-    admin_users >> Edge(label="Admin Access", color="#FF6B6B", style="dashed") >> igw >> alb
+    # Step 1: User to CloudFront
+    users >> Edge(label="1. HTTPS Request", color="#FF9900", style="bold") >> cloudfront
     
-    # Step 2: Load Balancer to UI
-    alb >> Edge(label="2. Route to UI", color="#4CAF50") >> ui_fargate
+    # Step 2: CloudFront to S3 (static files)
+    cloudfront >> Edge(label="2a. Static Files\n(/, /static/*)", color="#4CAF50") >> s3_frontend
     
-    # Step 3: UI to API Gateway
-    ui_fargate >> Edge(label="3. API Calls", color="#2196F3") >> api_gw
+    # Step 3: CloudFront to ALB (API calls)
+    cloudfront >> Edge(label="2b. API Calls\n(/api/*, HTTP)", color="#2196F3") >> alb
     
-    # Step 4: API Gateway to Lambda
-    api_gw >> Edge(label="4. Proxy Request", color="#9C27B0") >> lambda_proxy
+    # Step 4: ALB to ECS Backend
+    alb >> Edge(label="3. Route to Backend", color="#9C27B0") >> ecs_backend
     
-    # Step 5: Lambda to AgentCore
-    lambda_proxy >> Edge(label="5. Invoke Agent", color="#FF5722") >> agentcore
+    # Step 5: Backend to AgentCore
+    ecs_backend >> Edge(label="4. Invoke Agent\n(HTTPS + SigV4)", color="#FF5722") >> agentcore
     
     # Step 6: AgentCore to Claude
-    agentcore >> Edge(label="6. AI Analysis", color="#E91E63") >> claude
+    agentcore >> Edge(label="5. AI Analysis", color="#E91E63") >> claude
     
-    # Step 7: External Data (from AgentCore) - both arrows to the cluster
-    agentcore >> Edge(label="7. Banking Data", color="#00BCD4") >> fdic_api
-    agentcore >> Edge(label="8. SEC Filings", color="#00BCD4") >> fdic_api
+    # Step 7: External Data
+    agentcore >> Edge(label="6a. FDIC Data", color="#00BCD4") >> fdic_api
+    agentcore >> Edge(label="6b. SEC Filings", color="#00BCD4") >> sec_api
     
-    # Step 9: Document Storage
-    ui_fargate >> Edge(label="9. File Uploads", color="#FF9800") >> s3_bucket
+    # Step 8: Document Storage
+    ecs_backend >> Edge(label="7. Upload Docs", color="#FF9800") >> s3_docs
+    agentcore >> Edge(label="8. Read Docs", color="#FF9800", style="dashed") >> s3_docs
     
     # Container Deployment
-    ecr_repo >> Edge(label="Deploy UI", color="#795548") >> ui_fargate
+    ecr_repo >> Edge(label="Deploy Backend", color="#795548") >> ecs_backend
     
     # Infrastructure Services
-    ui_fargate >> Edge(label="Logs & Metrics", color="#607D8B") >> cloudwatch
-    lambda_proxy >> Edge(label="Permissions", color="#607D8B") >> iam
+    ecs_backend >> Edge(label="Logs & Metrics", color="#607D8B") >> cloudwatch
+    agentcore >> Edge(label="Logs & Traces", color="#607D8B") >> cloudwatch
+    ecs_backend >> Edge(label="IAM Permissions", color="#607D8B", style="dashed") >> iam
