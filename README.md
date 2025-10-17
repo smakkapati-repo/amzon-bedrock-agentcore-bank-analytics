@@ -50,7 +50,7 @@ Security is embedded throughout: Fargate containers run in private subnets, [IAM
 
 ## 🛠️ Technology Stack
 
-- **AI**: AWS Bedrock AgentCore + Claude Sonnet 4
+- **AI**: AWS Bedrock AgentCore + Claude Sonnet 4.5
 - **Agent**: Strands framework
 - **Backend**: Express.js + Python
 - **Frontend**: React + Material-UI
