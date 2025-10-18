@@ -34,9 +34,13 @@ if [ "$AUTH_STACK_EXISTS" = "yes" ]; then
   echo "✅ Auth stack already exists"
 else
   echo "⚠️  Auth stack not found - deploying..."
+  
+  # Get the script directory to reference templates correctly
+  SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+  
   aws cloudformation create-stack \
     --stack-name ${STACK_NAME}-auth \
-    --template-body file://../templates/auth.yaml \
+    --template-body file://${SCRIPT_DIR}/../templates/auth.yaml \
     --parameters \
       ParameterKey=ProjectName,ParameterValue=$STACK_NAME \
       ParameterKey=CallbackURL,ParameterValue=http://localhost:3000 \
@@ -64,10 +68,16 @@ echo -e "${GREEN}✅ Phase 1 Complete!${NC}\n"
 echo -e "${BLUE}┌─────────────────────────────────────────────────────────────┐${NC}"
 echo -e "${BLUE}│${NC} ${GREEN}[2/5]${NC} ${CYAN}Deploying Infrastructure (VPC, ALB, ECS)...${NC}         ${BLUE}│${NC}"
 echo -e "${BLUE}└─────────────────────────────────────────────────────────────┘${NC}"
-./phase2-infrastructure.sh $STACK_NAME $REGION
-if [ $? -ne 0 ]; then
-    echo -e "${RED}❌ Phase 2 failed${NC}"
-    exit 1
+
+INFRA_EXISTS=$(aws cloudformation describe-stacks --stack-name ${STACK_NAME}-infra --region $REGION >/dev/null 2>&1 && echo "yes" || echo "no")
+if [ "$INFRA_EXISTS" = "yes" ]; then
+  echo "✅ Infrastructure stack already exists - skipping"
+else
+  ./phase2-infrastructure.sh $STACK_NAME $REGION
+  if [ $? -ne 0 ]; then
+      echo -e "${RED}❌ Phase 2 failed${NC}"
+      exit 1
+  fi
 fi
 echo -e "${GREEN}✅ Phase 2 Complete!${NC}\n"
 
