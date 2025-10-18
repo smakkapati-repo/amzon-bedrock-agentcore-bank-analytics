@@ -28,7 +28,7 @@ echo -e "${BLUE}┌────────────────────�
 echo -e "${BLUE}│${NC} ${GREEN}[0/5]${NC} ${CYAN}Checking Cognito Auth Stack...${NC}                     ${BLUE}│${NC}"
 echo -e "${BLUE}└─────────────────────────────────────────────────────────────┘${NC}"
 
-AUTH_STACK_EXISTS=$(aws cloudformation describe-stacks --stack-name ${STACK_NAME}-auth --region $REGION 2>/dev/null && echo "yes" || echo "no")
+AUTH_STACK_EXISTS=$(aws cloudformation describe-stacks --stack-name ${STACK_NAME}-auth --region $REGION >/dev/null 2>&1 && echo "yes" || echo "no")
 
 if [ "$AUTH_STACK_EXISTS" = "yes" ]; then
   echo "✅ Auth stack already exists"
