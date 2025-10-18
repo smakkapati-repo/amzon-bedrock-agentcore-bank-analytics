@@ -36,14 +36,32 @@ aws cloudformation wait stack-create-complete --stack-name ${STACK_NAME}-fronten
 # Get CloudFront URL
 CLOUDFRONT_URL=$(aws cloudformation describe-stacks --stack-name ${STACK_NAME}-frontend --region $REGION --query 'Stacks[0].Outputs[?OutputKey==`ApplicationUrl`].OutputValue' --output text)
 
-# Update frontend config with CloudFront URL (not ALB)
-echo "🚀 Configuring frontend with CloudFront URL..."
+# Get Cognito config
+COGNITO_USER_POOL_ID=$(aws cloudformation describe-stacks --stack-name ${STACK_NAME}-auth --region $REGION --query 'Stacks[0].Outputs[?OutputKey==`UserPoolId`].OutputValue' --output text)
+COGNITO_CLIENT_ID=$(aws cloudformation describe-stacks --stack-name ${STACK_NAME}-auth --region $REGION --query 'Stacks[0].Outputs[?OutputKey==`UserPoolClientId`].OutputValue' --output text)
+COGNITO_DOMAIN=$(aws cloudformation describe-stacks --stack-name ${STACK_NAME}-auth --region $REGION --query 'Stacks[0].Outputs[?OutputKey==`HostedUIDomain`].OutputValue' --output text)
+
+# Update frontend config with CloudFront URL and Cognito
+echo "🚀 Configuring frontend with CloudFront URL and Cognito..."
 cd "${SCRIPT_DIR}/../../frontend"
 cat > src/config.js << EOF
-// Auto-generated - CloudFront + ECS Backend
+// Auto-generated - CloudFront + ECS Backend + Cognito Auth
 export const API_URL = '$CLOUDFRONT_URL';
 export const ENVIRONMENT = 'production';
 export const CLOUDFRONT_URL = '$CLOUDFRONT_URL';
+
+export const cognitoConfig = {
+  region: '$REGION',
+  userPoolId: '$COGNITO_USER_POOL_ID',
+  userPoolWebClientId: '$COGNITO_CLIENT_ID',
+  oauth: {
+    domain: '$COGNITO_DOMAIN',
+    scope: ['email', 'openid', 'profile'],
+    redirectSignIn: '$CLOUDFRONT_URL',
+    redirectSignOut: '$CLOUDFRONT_URL',
+    responseType: 'code'
+  }
+};
 EOF
 
 # Build and upload frontend
