@@ -5,7 +5,7 @@ STACK_NAME=${1:-bankiq}
 REGION=${2:-us-east-1}
 
 echo "=========================================="
-echo "PHASE 2: Deploy AWS Infrastructure"
+echo "Deploy AWS Infrastructure"
 echo "=========================================="
 
 # Get script directory and navigate to templates

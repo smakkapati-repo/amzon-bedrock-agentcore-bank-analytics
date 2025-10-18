@@ -5,7 +5,7 @@ STACK_NAME=${1:-bankiq}
 REGION=${2:-us-east-1}
 
 echo "=========================================="
-echo "PHASE 3: Deploy Backend"
+echo "Deploy Backend"
 echo "=========================================="
 
 # Load dependencies from previous phases

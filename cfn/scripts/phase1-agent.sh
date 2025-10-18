@@ -2,7 +2,7 @@
 set -e
 
 echo "=========================================="
-echo "PHASE 1: Deploy AgentCore Agent"
+echo "Deploy AgentCore Agent"
 echo "=========================================="
 
 # Get script directory and navigate to backend
