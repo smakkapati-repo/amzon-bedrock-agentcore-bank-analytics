@@ -7,7 +7,7 @@ import AnalyticsIcon from '@mui/icons-material/Analytics';
 import AssessmentIcon from '@mui/icons-material/Assessment';
 import LogoutIcon from '@mui/icons-material/Logout';
 import { Amplify } from '@aws-amplify/core';
-import { Auth } from '@aws-amplify/auth';
+import { fetchAuthSession, signOut } from '@aws-amplify/auth';
 import { cognitoConfig } from './config';
 import Home from './components/Home';
 import PeerAnalytics from './components/PeerAnalytics';
@@ -89,7 +89,7 @@ function App() {
 
   const handleLogout = async () => {
     try {
-      await Auth.signOut();
+      await signOut();
       console.log('[Auth] Signed out from Cognito');
     } catch (err) {
       console.error('[Auth] Sign out error:', err);
