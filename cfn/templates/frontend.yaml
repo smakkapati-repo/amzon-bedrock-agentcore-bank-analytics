@@ -93,7 +93,7 @@ Resources:
               OriginProtocolPolicy: http-only
               OriginSSLProtocols:
                 - TLSv1.2
-              OriginReadTimeout: 300  # 5 minutes for long-running AI queries
+              OriginReadTimeout: 60  # CloudFront max is 60 seconds (ALB handles longer timeouts)
               OriginKeepaliveTimeout: 60
             OriginCustomHeaders:
               - HeaderName: X-Custom-Header
