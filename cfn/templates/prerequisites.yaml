@@ -13,6 +13,11 @@ Parameters:
     AllowedValues: [dev, staging, prod]
     Description: Environment name
   
+  CodeBuildRoleArn:
+    Type: String
+    Default: ''
+    Description: ARN of the CodeBuild role for AgentCore (optional, for ECR permissions)
+  
 
 
 Resources:
@@ -130,7 +135,7 @@ Resources:
           - Sid: AllowCodeBuildPush
             Effect: Allow
             Principal:
-              Service: codebuild.amazonaws.com
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
             Action:
               - ecr:BatchCheckLayerAvailability
               - ecr:CompleteLayerUpload
@@ -139,6 +144,9 @@ Resources:
               - ecr:UploadLayerPart
               - ecr:GetDownloadUrlForLayer
               - ecr:BatchGetImage
+            Condition:
+              StringLike:
+                'aws:PrincipalArn': !Sub 'arn:aws:iam::${AWS::AccountId}:role/AmazonBedrockAgentCoreSDK*'
       LifecyclePolicy:
         LifecyclePolicyText: |
           {
