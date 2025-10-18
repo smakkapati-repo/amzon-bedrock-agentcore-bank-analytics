@@ -39,7 +39,7 @@ CLOUDFRONT_URL=$(aws cloudformation describe-stacks --stack-name ${STACK_NAME}-f
 # Get Cognito config
 COGNITO_USER_POOL_ID=$(aws cloudformation describe-stacks --stack-name ${STACK_NAME}-auth --region $REGION --query 'Stacks[0].Outputs[?OutputKey==`UserPoolId`].OutputValue' --output text)
 COGNITO_CLIENT_ID=$(aws cloudformation describe-stacks --stack-name ${STACK_NAME}-auth --region $REGION --query 'Stacks[0].Outputs[?OutputKey==`UserPoolClientId`].OutputValue' --output text)
-COGNITO_DOMAIN=$(aws cloudformation describe-stacks --stack-name ${STACK_NAME}-auth --region $REGION --query 'Stacks[0].Outputs[?OutputKey==`HostedUIDomain`].OutputValue' --output text)
+COGNITO_DOMAIN=$(aws cloudformation describe-stacks --stack-name ${STACK_NAME}-auth --region $REGION --query 'Stacks[0].Outputs[?OutputKey==`CognitoDomain`].OutputValue' --output text)
 
 # Update frontend config with CloudFront URL and Cognito
 echo "🚀 Configuring frontend with CloudFront URL and Cognito..."
