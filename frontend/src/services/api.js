@@ -1,4 +1,4 @@
-import { API_URL, USE_COGNITO } from '../config';
+import { API_URL } from '../config';
 import { Auth } from '@aws-amplify/auth';
 
 // Use CloudFront URL for production
@@ -7,14 +7,12 @@ const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || API_URL;
 async function getAuthHeaders() {
   const headers = { 'Content-Type': 'application/json' };
   
-  if (USE_COGNITO) {
-    try {
-      const session = await Auth.currentSession();
-      const token = session.getIdToken().getJwtToken();
-      headers['Authorization'] = `Bearer ${token}`;
-    } catch (err) {
-      console.warn('[API] Failed to get auth token:', err.message);
-    }
+  try {
+    const session = await Auth.currentSession();
+    const token = session.getIdToken().getJwtToken();
+    headers['Authorization'] = `Bearer ${token}`;
+  } catch (err) {
+    console.warn('[API] Failed to get auth token:', err.message);
   }
   
   return headers;

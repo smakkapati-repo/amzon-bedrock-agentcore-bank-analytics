@@ -8,21 +8,17 @@ import AssessmentIcon from '@mui/icons-material/Assessment';
 import LogoutIcon from '@mui/icons-material/Logout';
 import { Amplify } from '@aws-amplify/core';
 import { Auth } from '@aws-amplify/auth';
-import { cognitoConfig, USE_COGNITO } from './config';
+import { cognitoConfig } from './config';
 import Home from './components/Home';
 import PeerAnalytics from './components/PeerAnalytics';
 import FinancialReports from './components/FinancialReports';
 import Login from './components/Login';
 
-// Configure Amplify if Cognito is enabled
-if (USE_COGNITO) {
-  Amplify.configure({
-    Auth: cognitoConfig
-  });
-  console.log('[Auth] Cognito authentication enabled');
-} else {
-  console.log('[Auth] Using fallback authentication');
-}
+// Configure Amplify with Cognito
+Amplify.configure({
+  Auth: cognitoConfig
+});
+console.log('[Auth] Cognito authentication enabled');
 
 const theme = createTheme({
   palette: {
@@ -75,26 +71,15 @@ function App() {
   }, []);
 
   const checkAuth = async () => {
-    if (USE_COGNITO) {
-      try {
-        await Auth.currentAuthenticatedUser();
-        setIsAuthenticated(true);
-        console.log('[Auth] User authenticated via Cognito');
-      } catch {
-        setIsAuthenticated(false);
-        console.log('[Auth] No Cognito session found');
-      }
-    } else {
-      // Fallback to localStorage
-      const authStatus = localStorage.getItem('isAuthenticated');
-      setIsAuthenticated(authStatus === 'true');
+    try {
+      await Auth.currentAuthenticatedUser();
+      setIsAuthenticated(true);
+      console.log('[Auth] User authenticated via Cognito');
+    } catch {
+      setIsAuthenticated(false);
+      console.log('[Auth] No Cognito session found');
     }
     setLoading(false);
-  };
-
-  const handleLogin = () => {
-    localStorage.setItem('isAuthenticated', 'true');
-    setIsAuthenticated(true);
   };
 
   const handleCognitoLogin = () => {
@@ -103,15 +88,12 @@ function App() {
   };
 
   const handleLogout = async () => {
-    if (USE_COGNITO) {
-      try {
-        await Auth.signOut();
-        console.log('[Auth] Signed out from Cognito');
-      } catch (err) {
-        console.error('[Auth] Sign out error:', err);
-      }
+    try {
+      await Auth.signOut();
+      console.log('[Auth] Signed out from Cognito');
+    } catch (err) {
+      console.error('[Auth] Sign out error:', err);
     }
-    localStorage.removeItem('isAuthenticated');
     setIsAuthenticated(false);
     setTabValue(0);
   };
@@ -135,7 +117,7 @@ function App() {
     return (
       <ThemeProvider theme={theme}>
         <CssBaseline />
-        <Login onLogin={handleLogin} onCognitoLogin={handleCognitoLogin} />
+        <Login onCognitoLogin={handleCognitoLogin} />
       </ThemeProvider>
     );
   }
