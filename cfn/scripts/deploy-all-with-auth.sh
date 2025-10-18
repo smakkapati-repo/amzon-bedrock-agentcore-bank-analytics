@@ -36,7 +36,7 @@ else
   echo "⚠️  Auth stack not found - deploying..."
   aws cloudformation create-stack \
     --stack-name ${STACK_NAME}-auth \
-    --template-body file://cfn/templates/auth.yaml \
+    --template-body file://../templates/auth.yaml \
     --parameters \
       ParameterKey=ProjectName,ParameterValue=$STACK_NAME \
       ParameterKey=CallbackURL,ParameterValue=http://localhost:3000 \
@@ -105,7 +105,7 @@ if [ -n "$CLOUDFRONT_URL" ]; then
   
   aws cloudformation update-stack \
     --stack-name ${STACK_NAME}-auth \
-    --template-body file://cfn/templates/auth.yaml \
+    --template-body file://../templates/auth.yaml \
     --parameters \
       ParameterKey=ProjectName,ParameterValue=$STACK_NAME \
       ParameterKey=CallbackURL,ParameterValue=$CLOUDFRONT_URL \
