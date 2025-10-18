@@ -16,6 +16,7 @@ RUN npm install --production
 
 # Copy application code
 COPY server.js ./
+COPY auth-middleware.js ./
 COPY extract_pdf_metadata.py ./
 
 # Expose port
