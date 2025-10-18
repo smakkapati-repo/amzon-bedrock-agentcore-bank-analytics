@@ -124,6 +124,21 @@ Resources:
       RepositoryName: !Sub 'bedrock-agentcore-${ProjectName}-agent-${Environment}'
       ImageScanningConfiguration:
         ScanOnPush: true
+      RepositoryPolicyText:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AllowCodeBuildPush
+            Effect: Allow
+            Principal:
+              Service: codebuild.amazonaws.com
+            Action:
+              - ecr:BatchCheckLayerAvailability
+              - ecr:CompleteLayerUpload
+              - ecr:InitiateLayerUpload
+              - ecr:PutImage
+              - ecr:UploadLayerPart
+              - ecr:GetDownloadUrlForLayer
+              - ecr:BatchGetImage
       LifecyclePolicy:
         LifecyclePolicyText: |
           {
