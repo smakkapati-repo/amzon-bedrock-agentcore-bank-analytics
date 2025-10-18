@@ -43,12 +43,33 @@ fi
 echo ""
 echo -e "${YELLOW}📋 Gathering resource information...${NC}"
 
-# Get stack outputs
+# Try to get resources from master stack first, then from individual stacks
 FRONTEND_BUCKET=$(aws cloudformation describe-stacks --stack-name $STACK_NAME --region $REGION --query 'Stacks[0].Outputs[?OutputKey==`FrontendBucketName`].OutputValue' --output text 2>/dev/null || echo "")
 DOCS_BUCKET=$(aws cloudformation describe-stacks --stack-name $STACK_NAME --region $REGION --query 'Stacks[0].Outputs[?OutputKey==`UploadedDocsBucketName`].OutputValue' --output text 2>/dev/null || echo "")
 BACKEND_ECR=$(aws cloudformation describe-stacks --stack-name $STACK_NAME --region $REGION --query 'Stacks[0].Outputs[?OutputKey==`BackendECRRepositoryUri`].OutputValue' --output text 2>/dev/null | cut -d'/' -f2 || echo "")
 AGENT_ECR=$(aws cloudformation describe-stacks --stack-name $STACK_NAME --region $REGION --query 'Stacks[0].Outputs[?OutputKey==`AgentECRRepositoryUri`].OutputValue' --output text 2>/dev/null | cut -d'/' -f2 || echo "")
 CLOUDFRONT_DIST=$(aws cloudformation describe-stacks --stack-name $STACK_NAME --region $REGION --query 'Stacks[0].Outputs[?OutputKey==`CloudFrontDistributionId`].OutputValue' --output text 2>/dev/null || echo "")
+
+# If not found in master stack, try individual stacks
+if [ -z "$FRONTEND_BUCKET" ]; then
+  FRONTEND_BUCKET=$(aws cloudformation describe-stacks --stack-name ${STACK_NAME}-infra --region $REGION --query 'Stacks[0].Outputs[?OutputKey==`FrontendBucketName`].OutputValue' --output text 2>/dev/null || echo "")
+fi
+
+if [ -z "$DOCS_BUCKET" ]; then
+  DOCS_BUCKET=$(aws cloudformation describe-stacks --stack-name ${STACK_NAME}-infra --region $REGION --query 'Stacks[0].Outputs[?OutputKey==`UploadedDocsBucketName`].OutputValue' --output text 2>/dev/null || echo "")
+fi
+
+if [ -z "$BACKEND_ECR" ]; then
+  BACKEND_ECR=$(aws cloudformation describe-stacks --stack-name ${STACK_NAME}-infra --region $REGION --query 'Stacks[0].Outputs[?OutputKey==`BackendECRRepositoryUri`].OutputValue' --output text 2>/dev/null | cut -d'/' -f2 || echo "")
+fi
+
+if [ -z "$AGENT_ECR" ]; then
+  AGENT_ECR=$(aws cloudformation describe-stacks --stack-name ${STACK_NAME}-infra --region $REGION --query 'Stacks[0].Outputs[?OutputKey==`AgentECRRepositoryUri`].OutputValue' --output text 2>/dev/null | cut -d'/' -f2 || echo "")
+fi
+
+if [ -z "$CLOUDFRONT_DIST" ]; then
+  CLOUDFRONT_DIST=$(aws cloudformation describe-stacks --stack-name ${STACK_NAME}-frontend --region $REGION --query 'Stacks[0].Outputs[?OutputKey==`CloudFrontDistributionId`].OutputValue' --output text 2>/dev/null || echo "")
+fi
 
 echo "Found resources:"
 echo "  Frontend Bucket: ${FRONTEND_BUCKET:-Not found}"
@@ -58,20 +79,7 @@ echo "  Agent ECR: ${AGENT_ECR:-Not found}"
 echo "  CloudFront: ${CLOUDFRONT_DIST:-Not found}"
 echo ""
 
-# Step 1: Empty and delete S3 buckets
-if [ -n "$FRONTEND_BUCKET" ]; then
-  echo -e "${YELLOW}🗑️  Deleting frontend S3 bucket...${NC}"
-  aws s3 rb s3://$FRONTEND_BUCKET --force --region $REGION 2>/dev/null || true
-  echo "✅ Frontend bucket deleted"
-fi
-
-if [ -n "$DOCS_BUCKET" ]; then
-  echo -e "${YELLOW}🗑️  Deleting uploaded docs S3 bucket...${NC}"
-  aws s3 rb s3://$DOCS_BUCKET --force --region $REGION 2>/dev/null || true
-  echo "✅ Docs bucket deleted"
-fi
-
-# Step 2: Disable CloudFront distribution (required before deletion)
+# Step 1: Disable CloudFront distribution (required before deletion)
 if [ -n "$CLOUDFRONT_DIST" ]; then
   echo -e "${YELLOW}🔄 Disabling CloudFront distribution...${NC}"
   
@@ -99,26 +107,33 @@ if [ -n "$CLOUDFRONT_DIST" ]; then
   fi
 fi
 
-# Step 3: Delete ECR images
+# Step 2: Delete ECR repositories
 if [ -n "$BACKEND_ECR" ]; then
-  echo -e "${YELLOW}🗑️  Deleting backend ECR images...${NC}"
-  IMAGE_IDS=$(aws ecr list-images --repository-name $BACKEND_ECR --region $REGION --query 'imageIds[*]' --output json 2>/dev/null || echo "[]")
-  if [ "$IMAGE_IDS" != "[]" ]; then
-    aws ecr batch-delete-image --repository-name $BACKEND_ECR --image-ids "$IMAGE_IDS" --region $REGION > /dev/null 2>&1 || true
-  fi
-  echo "✅ Backend ECR images deleted"
+  echo -e "${YELLOW}🗑️  Deleting backend ECR repository: $BACKEND_ECR${NC}"
+  aws ecr delete-repository --repository-name $BACKEND_ECR --region $REGION --force 2>/dev/null || true
+  echo "✅ Backend ECR repository deleted"
 fi
 
 if [ -n "$AGENT_ECR" ]; then
-  echo -e "${YELLOW}🗑️  Deleting agent ECR images...${NC}"
-  IMAGE_IDS=$(aws ecr list-images --repository-name $AGENT_ECR --region $REGION --query 'imageIds[*]' --output json 2>/dev/null || echo "[]")
-  if [ "$IMAGE_IDS" != "[]" ]; then
-    aws ecr batch-delete-image --repository-name $AGENT_ECR --image-ids "$IMAGE_IDS" --region $REGION > /dev/null 2>&1 || true
-  fi
-  echo "✅ Agent ECR images deleted"
+  echo -e "${YELLOW}🗑️  Deleting agent ECR repository: $AGENT_ECR${NC}"
+  aws ecr delete-repository --repository-name $AGENT_ECR --region $REGION --force 2>/dev/null || true
+  echo "✅ Agent ECR repository deleted"
 fi
 
-# Step 4: Delete AgentCore agent
+# Fallback: Find and delete any remaining bankiq ECR repositories
+echo -e "${YELLOW}🔍 Checking for any remaining ${STACK_NAME} ECR repositories...${NC}"
+REMAINING_REPOS=$(aws ecr describe-repositories --region $REGION --query "repositories[?contains(repositoryName, '${STACK_NAME}')].repositoryName" --output text 2>/dev/null || echo "")
+if [ -n "$REMAINING_REPOS" ]; then
+  for REPO in $REMAINING_REPOS; do
+    echo "Found repository: $REPO - deleting..."
+    aws ecr delete-repository --repository-name $REPO --region $REGION --force 2>/dev/null || true
+  done
+  echo "✅ All remaining ECR repositories deleted"
+else
+  echo "No remaining ECR repositories found"
+fi
+
+# Step 3: Delete AgentCore agent
 echo ""
 echo -e "${YELLOW}🗑️  Deleting AgentCore agent...${NC}"
 if command -v agentcore &> /dev/null; then
@@ -128,23 +143,82 @@ else
   echo "⚠️  agentcore CLI not found, skipping agent deletion"
 fi
 
-# Step 5: Delete CloudFormation stack
+# Step 4: Delete CloudFormation stacks
 echo ""
-echo -e "${YELLOW}🗑️  Deleting CloudFormation stack...${NC}"
+echo -e "${YELLOW}🗑️  Deleting CloudFormation stacks...${NC}"
 echo "This will take 10-15 minutes..."
 echo ""
 
-aws cloudformation delete-stack --stack-name $STACK_NAME --region $REGION
+# Check if individual stacks exist
+FRONTEND_STACK_EXISTS=$(aws cloudformation describe-stacks --stack-name ${STACK_NAME}-frontend --region $REGION 2>/dev/null && echo "yes" || echo "no")
+BACKEND_STACK_EXISTS=$(aws cloudformation describe-stacks --stack-name ${STACK_NAME}-backend --region $REGION 2>/dev/null && echo "yes" || echo "no")
+INFRA_STACK_EXISTS=$(aws cloudformation describe-stacks --stack-name ${STACK_NAME}-infra --region $REGION 2>/dev/null && echo "yes" || echo "no")
+MASTER_STACK_EXISTS=$(aws cloudformation describe-stacks --stack-name $STACK_NAME --region $REGION 2>/dev/null && echo "yes" || echo "no")
 
-echo -e "${YELLOW}⏳ Waiting for stack deletion...${NC}"
-aws cloudformation wait stack-delete-complete --stack-name $STACK_NAME --region $REGION 2>/dev/null || {
-  echo -e "${RED}⚠️  Stack deletion may have failed or timed out${NC}"
-  echo "Check status with: aws cloudformation describe-stacks --stack-name $STACK_NAME --region $REGION"
-  exit 1
-}
+# Delete in reverse order (frontend -> backend -> infra -> master)
+if [ "$FRONTEND_STACK_EXISTS" = "yes" ]; then
+  echo "Deleting ${STACK_NAME}-frontend stack..."
+  aws cloudformation delete-stack --stack-name ${STACK_NAME}-frontend --region $REGION
+  echo -e "${YELLOW}⏳ Waiting for frontend stack deletion...${NC}"
+  aws cloudformation wait stack-delete-complete --stack-name ${STACK_NAME}-frontend --region $REGION 2>/dev/null || echo "⚠️  Frontend stack deletion completed with warnings"
+  echo -e "${GREEN}✅ Frontend stack deleted${NC}"
+fi
+
+if [ "$BACKEND_STACK_EXISTS" = "yes" ]; then
+  echo "Deleting ${STACK_NAME}-backend stack..."
+  aws cloudformation delete-stack --stack-name ${STACK_NAME}-backend --region $REGION
+  echo -e "${YELLOW}⏳ Waiting for backend stack deletion...${NC}"
+  aws cloudformation wait stack-delete-complete --stack-name ${STACK_NAME}-backend --region $REGION 2>/dev/null || echo "⚠️  Backend stack deletion completed with warnings"
+  echo -e "${GREEN}✅ Backend stack deleted${NC}"
+fi
+
+if [ "$INFRA_STACK_EXISTS" = "yes" ]; then
+  echo "Deleting ${STACK_NAME}-infra stack..."
+  aws cloudformation delete-stack --stack-name ${STACK_NAME}-infra --region $REGION
+  echo -e "${YELLOW}⏳ Waiting for infra stack deletion...${NC}"
+  aws cloudformation wait stack-delete-complete --stack-name ${STACK_NAME}-infra --region $REGION 2>/dev/null || echo "⚠️  Infra stack deletion completed with warnings"
+  echo -e "${GREEN}✅ Infra stack deleted${NC}"
+fi
+
+if [ "$MASTER_STACK_EXISTS" = "yes" ]; then
+  echo "Deleting ${STACK_NAME} master stack..."
+  aws cloudformation delete-stack --stack-name $STACK_NAME --region $REGION
+  echo -e "${YELLOW}⏳ Waiting for master stack deletion...${NC}"
+  aws cloudformation wait stack-delete-complete --stack-name $STACK_NAME --region $REGION 2>/dev/null || echo "⚠️  Master stack deletion completed with warnings"
+  echo -e "${GREEN}✅ Master stack deleted${NC}"
+fi
 
 echo ""
-echo -e "${GREEN}✅ Stack deleted successfully!${NC}"
+echo -e "${GREEN}✅ All stacks deleted successfully!${NC}"
+
+# Step 5: Empty and delete S3 buckets (AFTER stacks are deleted)
+echo ""
+echo -e "${YELLOW}🗑️  Final cleanup: Deleting S3 buckets...${NC}"
+
+if [ -n "$FRONTEND_BUCKET" ]; then
+  echo -e "${YELLOW}🗑️  Deleting frontend S3 bucket: $FRONTEND_BUCKET${NC}"
+  aws s3 rb s3://$FRONTEND_BUCKET --force --region $REGION 2>/dev/null || true
+  echo "✅ Frontend bucket deleted"
+fi
+
+if [ -n "$DOCS_BUCKET" ]; then
+  echo -e "${YELLOW}🗑️  Deleting uploaded docs S3 bucket: $DOCS_BUCKET${NC}"
+  aws s3 rb s3://$DOCS_BUCKET --force --region $REGION 2>/dev/null || true
+  echo "✅ Docs bucket deleted"
+fi
+
+# Fallback: Find and delete any remaining bankiq S3 buckets
+echo -e "${YELLOW}🔍 Checking for any remaining ${STACK_NAME} S3 buckets...${NC}"
+REMAINING_BUCKETS=$(aws s3 ls --region $REGION | grep "${STACK_NAME}" | awk '{print $3}' || echo "")
+if [ -n "$REMAINING_BUCKETS" ]; then
+  for BUCKET in $REMAINING_BUCKETS; do
+    echo "Found bucket: $BUCKET - deleting..."
+    aws s3 rb s3://$BUCKET --force --region $REGION 2>/dev/null || true
+  done
+  echo "✅ All remaining buckets deleted"
+else
+  echo "No remaining buckets found"
+fi
 
 # Step 6: Clean up staging buckets (optional)
 echo ""
