@@ -140,10 +140,10 @@ echo "This will take 10-15 minutes..."
 echo ""
 
 # Check if individual stacks exist
-FRONTEND_STACK_EXISTS=$(aws cloudformation describe-stacks --stack-name ${STACK_NAME}-frontend --region $REGION 2>/dev/null && echo "yes" || echo "no")
-BACKEND_STACK_EXISTS=$(aws cloudformation describe-stacks --stack-name ${STACK_NAME}-backend --region $REGION 2>/dev/null && echo "yes" || echo "no")
-INFRA_STACK_EXISTS=$(aws cloudformation describe-stacks --stack-name ${STACK_NAME}-infra --region $REGION 2>/dev/null && echo "yes" || echo "no")
-MASTER_STACK_EXISTS=$(aws cloudformation describe-stacks --stack-name $STACK_NAME --region $REGION 2>/dev/null && echo "yes" || echo "no")
+FRONTEND_STACK_EXISTS=$(aws cloudformation describe-stacks --stack-name ${STACK_NAME}-frontend --region $REGION >/dev/null 2>&1 && echo "yes" || echo "no")
+BACKEND_STACK_EXISTS=$(aws cloudformation describe-stacks --stack-name ${STACK_NAME}-backend --region $REGION >/dev/null 2>&1 && echo "yes" || echo "no")
+INFRA_STACK_EXISTS=$(aws cloudformation describe-stacks --stack-name ${STACK_NAME}-infra --region $REGION >/dev/null 2>&1 && echo "yes" || echo "no")
+MASTER_STACK_EXISTS=$(aws cloudformation describe-stacks --stack-name $STACK_NAME --region $REGION >/dev/null 2>&1 && echo "yes" || echo "no")
 
 # Delete in correct dependency order:
 # 1. Frontend (depends on infra)
