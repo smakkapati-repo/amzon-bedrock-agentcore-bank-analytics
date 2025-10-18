@@ -7,7 +7,7 @@ import AnalyticsIcon from '@mui/icons-material/Analytics';
 import AssessmentIcon from '@mui/icons-material/Assessment';
 import LogoutIcon from '@mui/icons-material/Logout';
 import { Amplify } from '@aws-amplify/core';
-import { fetchAuthSession, signOut } from '@aws-amplify/auth';
+import { fetchAuthSession, signOut, getCurrentUser, signInWithRedirect } from '@aws-amplify/auth';
 import { cognitoConfig } from './config';
 import Home from './components/Home';
 import PeerAnalytics from './components/PeerAnalytics';
@@ -72,7 +72,7 @@ function App() {
 
   const checkAuth = async () => {
     try {
-      await Auth.currentAuthenticatedUser();
+      await getCurrentUser();
       setIsAuthenticated(true);
       console.log('[Auth] User authenticated via Cognito');
     } catch {
@@ -84,7 +84,7 @@ function App() {
 
   const handleCognitoLogin = () => {
     // Redirect to Cognito Hosted UI
-    Auth.federatedSignIn();
+    signInWithRedirect();
   };
 
   const handleLogout = async () => {
