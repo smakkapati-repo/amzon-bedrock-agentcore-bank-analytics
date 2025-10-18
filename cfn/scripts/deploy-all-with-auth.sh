@@ -116,17 +116,16 @@ CLOUDFRONT_URL=$(aws cloudformation describe-stacks --stack-name ${STACK_NAME}-f
 if [ -n "$CLOUDFRONT_URL" ]; then
   echo "Updating Cognito callback URLs with: $CLOUDFRONT_URL"
   
-  aws cloudformation update-stack \
-    --stack-name ${STACK_NAME}-auth \
-    --template-body file://../templates/auth.yaml \
-    --parameters \
-      ParameterKey=ProjectName,ParameterValue=$STACK_NAME \
-      ParameterKey=CallbackURL,ParameterValue=$CLOUDFRONT_URL \
-      ParameterKey=Environment,ParameterValue=prod \
-    --region $REGION
+  USER_POOL_ID=$(aws cloudformation describe-stacks --stack-name ${STACK_NAME}-auth --region $REGION --query 'Stacks[0].Outputs[?OutputKey==`UserPoolId`].OutputValue' --output text)
+  CLIENT_ID=$(aws cloudformation describe-stacks --stack-name ${STACK_NAME}-auth --region $REGION --query 'Stacks[0].Outputs[?OutputKey==`UserPoolClientId`].OutputValue' --output text)
   
-  echo "⏳ Waiting for auth stack update..."
-  aws cloudformation wait stack-update-complete --stack-name ${STACK_NAME}-auth --region $REGION 2>/dev/null || echo "⚠️  Update may have had no changes"
+  aws cognito-idp update-user-pool-client \
+    --user-pool-id $USER_POOL_ID \
+    --client-id $CLIENT_ID \
+    --callback-urls "$CLOUDFRONT_URL" "http://localhost:3000" \
+    --logout-urls "$CLOUDFRONT_URL" "http://localhost:3000" \
+    --region $REGION > /dev/null
+  
   echo "✅ Cognito callback URLs updated"
 else
   echo "⚠️  Could not get CloudFront URL - skipping callback URL update"
