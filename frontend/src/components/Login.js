@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
-import { Box, Paper, TextField, Button, Typography, Alert } from '@mui/material';
+import { Box, Paper, TextField, Button, Typography, Alert, Divider, Chip } from '@mui/material';
 import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
+import CloudIcon from '@mui/icons-material/Cloud';
+import { USE_COGNITO } from '../config';
 
-const Login = ({ onLogin }) => {
+const Login = ({ onLogin, onCognitoLogin }) => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -10,7 +12,7 @@ const Login = ({ onLogin }) => {
   const handleSubmit = (e) => {
     e.preventDefault();
     
-    // Simple hardcoded credentials (replace with real auth later)
+    // Simple hardcoded credentials (fallback)
     if (username === 'admin' && password === 'bankiq2024') {
       localStorage.setItem('isAuthenticated', 'true');
       onLogin();
@@ -43,7 +45,7 @@ const Login = ({ onLogin }) => {
           BankIQ+ Login
         </Typography>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-          Enter your credentials to access the platform
+          {USE_COGNITO ? 'Secure authentication powered by AWS Cognito' : 'Enter your credentials to access the platform'}
         </Typography>
 
         {error && (
@@ -52,41 +54,99 @@ const Login = ({ onLogin }) => {
           </Alert>
         )}
 
-        <form onSubmit={handleSubmit}>
-          <TextField
-            fullWidth
-            label="Username"
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            margin="normal"
-            required
-          />
-          <TextField
-            fullWidth
-            label="Password"
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            margin="normal"
-            required
-          />
-          <Button
-            type="submit"
-            variant="contained"
-            fullWidth
-            sx={{
-              mt: 3,
-              backgroundColor: '#A020F0',
-              '&:hover': { backgroundColor: '#8B1A9B' },
-            }}
-          >
-            Login
-          </Button>
-        </form>
+        {USE_COGNITO ? (
+          // Cognito Login
+          <>
+            <Button
+              variant="contained"
+              fullWidth
+              onClick={onCognitoLogin}
+              startIcon={<CloudIcon />}
+              sx={{
+                mt: 2,
+                backgroundColor: '#A020F0',
+                '&:hover': { backgroundColor: '#8B1A9B' },
+              }}
+            >
+              Sign In with AWS Cognito
+            </Button>
+            
+            <Divider sx={{ my: 3 }}>
+              <Chip label="OR" size="small" />
+            </Divider>
+            
+            <form onSubmit={handleSubmit}>
+              <TextField
+                fullWidth
+                label="Username"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                margin="normal"
+                size="small"
+              />
+              <TextField
+                fullWidth
+                label="Password"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                margin="normal"
+                size="small"
+              />
+              <Button
+                type="submit"
+                variant="outlined"
+                fullWidth
+                sx={{ mt: 2 }}
+              >
+                Demo Login (Fallback)
+              </Button>
+            </form>
+            
+            <Typography variant="caption" color="text.secondary" sx={{ mt: 2, display: 'block' }}>
+              Demo credentials: admin / bankiq2024
+            </Typography>
+          </>
+        ) : (
+          // Old Login (Fallback)
+          <>
+            <form onSubmit={handleSubmit}>
+              <TextField
+                fullWidth
+                label="Username"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                margin="normal"
+                required
+              />
+              <TextField
+                fullWidth
+                label="Password"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                margin="normal"
+                required
+              />
+              <Button
+                type="submit"
+                variant="contained"
+                fullWidth
+                sx={{
+                  mt: 3,
+                  backgroundColor: '#A020F0',
+                  '&:hover': { backgroundColor: '#8B1A9B' },
+                }}
+              >
+                Login
+              </Button>
+            </form>
 
-        <Typography variant="caption" color="text.secondary" sx={{ mt: 2, display: 'block' }}>
-          Demo credentials: admin / bankiq2024
-        </Typography>
+            <Typography variant="caption" color="text.secondary" sx={{ mt: 2, display: 'block' }}>
+              Demo credentials: admin / bankiq2024
+            </Typography>
+          </>
+        )}
       </Paper>
     </Box>
   );

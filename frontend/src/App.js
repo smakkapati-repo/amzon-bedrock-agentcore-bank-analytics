@@ -1,15 +1,28 @@
 import React, { useState, useEffect } from 'react';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
-import { Box, Tabs, Tab, AppBar, Toolbar, Typography, Container, IconButton } from '@mui/material';
+import { Box, Tabs, Tab, AppBar, Toolbar, Typography, Container, IconButton, CircularProgress } from '@mui/material';
 import CssBaseline from '@mui/material/CssBaseline';
 import AccountBalanceIcon from '@mui/icons-material/AccountBalance';
 import AnalyticsIcon from '@mui/icons-material/Analytics';
 import AssessmentIcon from '@mui/icons-material/Assessment';
 import LogoutIcon from '@mui/icons-material/Logout';
+import { Amplify } from '@aws-amplify/core';
+import { Auth } from '@aws-amplify/auth';
+import { cognitoConfig, USE_COGNITO } from './config';
 import Home from './components/Home';
 import PeerAnalytics from './components/PeerAnalytics';
 import FinancialReports from './components/FinancialReports';
 import Login from './components/Login';
+
+// Configure Amplify if Cognito is enabled
+if (USE_COGNITO) {
+  Amplify.configure({
+    Auth: cognitoConfig
+  });
+  console.log('[Auth] Cognito authentication enabled');
+} else {
+  console.log('[Auth] Using fallback authentication');
+}
 
 const theme = createTheme({
   palette: {
@@ -55,20 +68,49 @@ function TabPanel({ children, value, index }) {
 function App() {
   const [tabValue, setTabValue] = useState(0);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Check if user is already logged in
-    const authStatus = localStorage.getItem('isAuthenticated');
-    if (authStatus === 'true') {
-      setIsAuthenticated(true);
-    }
+    checkAuth();
   }, []);
 
+  const checkAuth = async () => {
+    if (USE_COGNITO) {
+      try {
+        await Auth.currentAuthenticatedUser();
+        setIsAuthenticated(true);
+        console.log('[Auth] User authenticated via Cognito');
+      } catch {
+        setIsAuthenticated(false);
+        console.log('[Auth] No Cognito session found');
+      }
+    } else {
+      // Fallback to localStorage
+      const authStatus = localStorage.getItem('isAuthenticated');
+      setIsAuthenticated(authStatus === 'true');
+    }
+    setLoading(false);
+  };
+
   const handleLogin = () => {
+    localStorage.setItem('isAuthenticated', 'true');
     setIsAuthenticated(true);
   };
 
-  const handleLogout = () => {
+  const handleCognitoLogin = () => {
+    // Redirect to Cognito Hosted UI
+    Auth.federatedSignIn();
+  };
+
+  const handleLogout = async () => {
+    if (USE_COGNITO) {
+      try {
+        await Auth.signOut();
+        console.log('[Auth] Signed out from Cognito');
+      } catch (err) {
+        console.error('[Auth] Sign out error:', err);
+      }
+    }
     localStorage.removeItem('isAuthenticated');
     setIsAuthenticated(false);
     setTabValue(0);
@@ -78,11 +120,22 @@ function App() {
     setTabValue(newValue);
   };
 
+  if (loading) {
+    return (
+      <ThemeProvider theme={theme}>
+        <CssBaseline />
+        <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh' }}>
+          <CircularProgress />
+        </Box>
+      </ThemeProvider>
+    );
+  }
+
   if (!isAuthenticated) {
     return (
       <ThemeProvider theme={theme}>
         <CssBaseline />
-        <Login onLogin={handleLogin} />
+        <Login onLogin={handleLogin} onCognitoLogin={handleCognitoLogin} />
       </ThemeProvider>
     );
   }

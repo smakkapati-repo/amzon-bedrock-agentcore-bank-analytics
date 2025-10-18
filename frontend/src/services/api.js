@@ -1,12 +1,31 @@
-import { API_URL } from '../config';
+import { API_URL, USE_COGNITO } from '../config';
+import { Auth } from '@aws-amplify/auth';
 
 // Use CloudFront URL for production
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || API_URL;
 
+async function getAuthHeaders() {
+  const headers = { 'Content-Type': 'application/json' };
+  
+  if (USE_COGNITO) {
+    try {
+      const session = await Auth.currentSession();
+      const token = session.getIdToken().getJwtToken();
+      headers['Authorization'] = `Bearer ${token}`;
+    } catch (err) {
+      console.warn('[API] Failed to get auth token:', err.message);
+    }
+  }
+  
+  return headers;
+}
+
 async function callBackend(inputText) {
+  const headers = await getAuthHeaders();
+  
   const response = await fetch(`${BACKEND_URL}/api/invoke-agent`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers,
     body: JSON.stringify({ inputText })
   });
   
@@ -211,9 +230,11 @@ export const api = {
 
   // Async job methods
   async submitJob(inputText, jobType = 'agent-invocation') {
+    const headers = await getAuthHeaders();
+    
     const response = await fetch(`${BACKEND_URL}/api/jobs/submit`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify({ inputText, jobType })
     });
     
