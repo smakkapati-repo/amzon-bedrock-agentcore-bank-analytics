@@ -155,13 +155,22 @@ BACKEND_STACK_EXISTS=$(aws cloudformation describe-stacks --stack-name ${STACK_N
 INFRA_STACK_EXISTS=$(aws cloudformation describe-stacks --stack-name ${STACK_NAME}-infra --region $REGION 2>/dev/null && echo "yes" || echo "no")
 MASTER_STACK_EXISTS=$(aws cloudformation describe-stacks --stack-name $STACK_NAME --region $REGION 2>/dev/null && echo "yes" || echo "no")
 
-# Delete in reverse order (frontend -> backend -> infra -> master)
+# Delete in correct dependency order:
+# 1. Frontend (depends on infra)
+# 2. Backend (depends on infra)
+# 3. Infra (base - must be deleted last)
+# 4. Master (if exists, orchestrates nested stacks)
+
+echo "Deletion order: Frontend → Backend → Infra → Master"
+echo ""
+
 if [ "$FRONTEND_STACK_EXISTS" = "yes" ]; then
   echo "Deleting ${STACK_NAME}-frontend stack..."
   aws cloudformation delete-stack --stack-name ${STACK_NAME}-frontend --region $REGION
   echo -e "${YELLOW}⏳ Waiting for frontend stack deletion...${NC}"
   aws cloudformation wait stack-delete-complete --stack-name ${STACK_NAME}-frontend --region $REGION 2>/dev/null || echo "⚠️  Frontend stack deletion completed with warnings"
   echo -e "${GREEN}✅ Frontend stack deleted${NC}"
+  echo ""
 fi
 
 if [ "$BACKEND_STACK_EXISTS" = "yes" ]; then
@@ -170,22 +179,27 @@ if [ "$BACKEND_STACK_EXISTS" = "yes" ]; then
   echo -e "${YELLOW}⏳ Waiting for backend stack deletion...${NC}"
   aws cloudformation wait stack-delete-complete --stack-name ${STACK_NAME}-backend --region $REGION 2>/dev/null || echo "⚠️  Backend stack deletion completed with warnings"
   echo -e "${GREEN}✅ Backend stack deleted${NC}"
+  echo ""
 fi
 
+# Infra must be deleted AFTER frontend and backend because they depend on its exports
 if [ "$INFRA_STACK_EXISTS" = "yes" ]; then
-  echo "Deleting ${STACK_NAME}-infra stack..."
+  echo "Deleting ${STACK_NAME}-infra stack (base infrastructure)..."
   aws cloudformation delete-stack --stack-name ${STACK_NAME}-infra --region $REGION
   echo -e "${YELLOW}⏳ Waiting for infra stack deletion...${NC}"
   aws cloudformation wait stack-delete-complete --stack-name ${STACK_NAME}-infra --region $REGION 2>/dev/null || echo "⚠️  Infra stack deletion completed with warnings"
   echo -e "${GREEN}✅ Infra stack deleted${NC}"
+  echo ""
 fi
 
+# Master stack (if using nested stacks pattern)
 if [ "$MASTER_STACK_EXISTS" = "yes" ]; then
   echo "Deleting ${STACK_NAME} master stack..."
   aws cloudformation delete-stack --stack-name $STACK_NAME --region $REGION
   echo -e "${YELLOW}⏳ Waiting for master stack deletion...${NC}"
   aws cloudformation wait stack-delete-complete --stack-name $STACK_NAME --region $REGION 2>/dev/null || echo "⚠️  Master stack deletion completed with warnings"
   echo -e "${GREEN}✅ Master stack deleted${NC}"
+  echo ""
 fi
 
 echo ""
