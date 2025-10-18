@@ -45,12 +45,6 @@ with Diagram(
     filename="bankiq_plus_agentcore_architecture"
 ):
     
-    with Cluster("External Data Sources", graph_attr={"bgcolor": "white", "style": "rounded", "rankdir": "LR"}):
-        fdic_api = Server("FDIC Call Reports\n2024-2025 Data")
-        sec_api = Server("SEC EDGAR API\nLive Filings")
-        
-        fdic_api - sec_api
-    
     users = ExternalUsers("Banking Analysts\n& Executives")
     
 
@@ -121,13 +115,9 @@ with Diagram(
     # Step 7: AgentCore to Claude
     agentcore >> Edge(label="6. AI Analysis", color="#E91E63") >> claude
     
-    # Step 8: External Data
-    agentcore >> Edge(label="7a. FDIC Data", color="#00BCD4") >> fdic_api
-    agentcore >> Edge(label="7b. SEC Filings", color="#00BCD4") >> sec_api
-    
-    # Step 9: Document Storage
-    ecs_backend >> Edge(label="8. Upload Docs", color="#FF9800") >> s3_docs
-    agentcore >> Edge(label="9. Read Docs", color="#FF9800", style="dashed") >> s3_docs
+    # Step 8: Document Storage
+    ecs_backend >> Edge(label="7. Upload Docs", color="#FF9800") >> s3_docs
+    agentcore >> Edge(label="8. Read Docs", color="#FF9800", style="dashed") >> s3_docs
     
     # Container Deployment
     ecr_repo >> Edge(label="Deploy Backend", color="#795548") >> ecs_backend
@@ -136,3 +126,14 @@ with Diagram(
     ecs_backend >> Edge(label="Logs & Metrics", color="#607D8B") >> cloudwatch
     agentcore >> Edge(label="Logs & Traces", color="#607D8B") >> cloudwatch
     ecs_backend >> Edge(label="IAM Permissions", color="#607D8B", style="dashed") >> iam
+    
+    # External Data Sources (at bottom)
+    with Cluster("External Data Sources", graph_attr={"bgcolor": "white", "style": "rounded"}):
+        fdic_api = Server("FDIC Call Reports\n2024-2025 Data")
+        sec_api = Server("SEC EDGAR API\nLive Filings")
+        
+        fdic_api - sec_api
+    
+    # Step 9: External Data
+    agentcore >> Edge(label="9a. FDIC Data", color="#00BCD4") >> fdic_api
+    agentcore >> Edge(label="9b. SEC Filings", color="#00BCD4") >> sec_api
