@@ -11,10 +11,17 @@ async function callBackend(inputText) {
   });
   
   if (!response.ok) {
-    throw new Error(`Backend error: ${response.status}`);
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.error || `Backend error: ${response.status}`);
   }
   
   const data = await response.json();
+  
+  // Check if backend returned an error in the response body
+  if (data.error) {
+    throw new Error(data.error);
+  }
+  
   return data.output;
 }
 
@@ -176,8 +183,25 @@ export const api = {
     };
   },
 
-  async chatWithAI(question, bankName) {
-    const response = await callBackend(`${question} about ${bankName}`);
+  async chatWithAI(question, bankName, reports, useRag, cik) {
+    // Build context-aware prompt
+    let prompt = question;
+    
+    if (bankName) {
+      prompt = `${question} about ${bankName}`;
+      
+      // Add available reports context if provided
+      if (reports && (reports['10-K']?.length > 0 || reports['10-Q']?.length > 0)) {
+        const reportsList = [
+          ...(reports['10-K'] || []).map(r => `${r.form} filed ${r.filing_date}`),
+          ...(reports['10-Q'] || []).map(r => `${r.form} filed ${r.filing_date}`)
+        ].slice(0, 5).join(', ');
+        
+        prompt += `. Available SEC filings: ${reportsList}`;
+      }
+    }
+    
+    const response = await callBackend(prompt);
     return { response, sources: [] };
   },
 

@@ -110,7 +110,11 @@ function FinancialReports() {
 
       
     } catch (err) {
-      setChatHistory(prev => [...prev, { role: 'assistant', content: 'Error: Failed to get AI response' }]);
+      console.error('Chat error:', err);
+      setChatHistory(prev => [...prev, { 
+        role: 'assistant', 
+        content: `Error: ${err.message || 'Failed to get AI response'}` 
+      }]);
     } finally {
       setChatLoading(false);
     }
