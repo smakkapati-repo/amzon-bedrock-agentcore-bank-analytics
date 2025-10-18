@@ -226,14 +226,32 @@ delete_bucket_with_versions() {
   local BUCKET=$1
   echo "Deleting bucket: $BUCKET"
   
-  # Delete all objects
+  # Delete all current objects first
   aws s3 rm s3://$BUCKET --recursive --region $REGION 2>/dev/null || true
   
-  # Delete all versions
-  aws s3api delete-objects --bucket $BUCKET --delete "$(aws s3api list-object-versions --bucket $BUCKET --query='{Objects: Versions[].{Key:Key,VersionId:VersionId}}' --max-items 1000 --region $REGION 2>/dev/null)" --region $REGION 2>/dev/null || true
+  # Loop to delete all versions (in case there are more than 1000)
+  local HAS_VERSIONS="yes"
+  while [ "$HAS_VERSIONS" = "yes" ]; do
+    local VERSIONS=$(aws s3api list-object-versions --bucket $BUCKET --max-items 1000 --region $REGION --query='{Objects: Versions[].{Key:Key,VersionId:VersionId}}' 2>/dev/null)
+    
+    if [ "$VERSIONS" != "" ] && [ "$VERSIONS" != "{}" ] && [ "$VERSIONS" != '{"Objects":null}' ]; then
+      aws s3api delete-objects --bucket $BUCKET --delete "$VERSIONS" --region $REGION 2>/dev/null || true
+    else
+      HAS_VERSIONS="no"
+    fi
+  done
   
-  # Delete all delete markers
-  aws s3api delete-objects --bucket $BUCKET --delete "$(aws s3api list-object-versions --bucket $BUCKET --query='{Objects: DeleteMarkers[].{Key:Key,VersionId:VersionId}}' --max-items 1000 --region $REGION 2>/dev/null)" --region $REGION 2>/dev/null || true
+  # Loop to delete all delete markers
+  local HAS_MARKERS="yes"
+  while [ "$HAS_MARKERS" = "yes" ]; do
+    local MARKERS=$(aws s3api list-object-versions --bucket $BUCKET --max-items 1000 --region $REGION --query='{Objects: DeleteMarkers[].{Key:Key,VersionId:VersionId}}' 2>/dev/null)
+    
+    if [ "$MARKERS" != "" ] && [ "$MARKERS" != "{}" ] && [ "$MARKERS" != '{"Objects":null}' ]; then
+      aws s3api delete-objects --bucket $BUCKET --delete "$MARKERS" --region $REGION 2>/dev/null || true
+    else
+      HAS_MARKERS="no"
+    fi
+  done
   
   # Delete bucket
   aws s3 rb s3://$BUCKET --region $REGION 2>/dev/null || true
