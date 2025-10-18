@@ -144,9 +144,6 @@ Resources:
               - ecr:UploadLayerPart
               - ecr:GetDownloadUrlForLayer
               - ecr:BatchGetImage
-            Condition:
-              StringLike:
-                'aws:PrincipalArn': !Sub 'arn:aws:iam::${AWS::AccountId}:role/AmazonBedrockAgentCoreSDK*'
       LifecyclePolicy:
         LifecyclePolicyText: |
           {
