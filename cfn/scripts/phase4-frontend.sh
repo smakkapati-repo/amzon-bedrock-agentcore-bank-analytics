@@ -15,9 +15,12 @@ ALB_URL=$(cat /tmp/alb_url.txt)
 echo "Frontend Bucket: $FRONTEND_BUCKET"
 echo "Backend URL: $ALB_URL"
 
+# Get script directory
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+
 # Deploy frontend stack (CloudFront)
 echo "🚀 Deploying frontend stack..."
-cd ../templates
+cd "${SCRIPT_DIR}/../templates"
 aws cloudformation create-stack \
   --stack-name ${STACK_NAME}-frontend \
   --template-body file://frontend.yaml \
@@ -35,7 +38,7 @@ CLOUDFRONT_URL=$(aws cloudformation describe-stacks --stack-name ${STACK_NAME}-f
 
 # Update frontend config with CloudFront URL (not ALB)
 echo "🚀 Configuring frontend with CloudFront URL..."
-cd ../../frontend
+cd "${SCRIPT_DIR}/../../frontend"
 cat > src/config.js << EOF
 // Auto-generated - CloudFront + ECS Backend
 export const API_URL = '$CLOUDFRONT_URL';

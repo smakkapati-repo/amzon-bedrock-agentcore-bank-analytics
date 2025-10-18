@@ -8,7 +8,9 @@ echo "=========================================="
 echo "PHASE 2: Deploy AWS Infrastructure"
 echo "=========================================="
 
-cd ../templates
+# Get script directory and navigate to templates
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+cd "${SCRIPT_DIR}/../templates"
 
 # Deploy prerequisites stack
 echo "🚀 Deploying infrastructure..."

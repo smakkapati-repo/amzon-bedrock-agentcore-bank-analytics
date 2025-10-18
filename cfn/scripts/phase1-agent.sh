@@ -5,7 +5,9 @@ echo "=========================================="
 echo "PHASE 1: Deploy AgentCore Agent"
 echo "=========================================="
 
-cd ../../backend
+# Get script directory and navigate to backend
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+cd "${SCRIPT_DIR}/../../backend"
 
 # Check if agentcore is installed
 if ! command -v agentcore &> /dev/null; then
