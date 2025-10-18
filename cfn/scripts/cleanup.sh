@@ -120,13 +120,19 @@ if [ -n "$AGENT_ECR" ]; then
   echo "✅ Agent ECR repository deleted"
 fi
 
-# Fallback: Find and delete any remaining bankiq ECR repositories
+# Fallback: Find and delete any remaining ECR repositories with stack name or variations
 echo -e "${YELLOW}🔍 Checking for any remaining ${STACK_NAME} ECR repositories...${NC}"
-REMAINING_REPOS=$(aws ecr describe-repositories --region $REGION --query "repositories[?contains(repositoryName, '${STACK_NAME}')].repositoryName" --output text 2>/dev/null || echo "")
+# Search for repositories containing stack name (handles both "bankiq" and "bank-iq" variations)
+STACK_NAME_PATTERN=$(echo "$STACK_NAME" | sed 's/-//g')
+REMAINING_REPOS=$(aws ecr describe-repositories --region $REGION --query "repositories[].repositoryName" --output text 2>/dev/null || echo "")
 if [ -n "$REMAINING_REPOS" ]; then
   for REPO in $REMAINING_REPOS; do
-    echo "Found repository: $REPO - deleting..."
-    aws ecr delete-repository --repository-name $REPO --region $REGION --force 2>/dev/null || true
+    # Check if repo name contains stack name (with or without hyphens)
+    REPO_NORMALIZED=$(echo "$REPO" | sed 's/-//g')
+    if [[ "$REPO_NORMALIZED" == *"$STACK_NAME_PATTERN"* ]]; then
+      echo "Found repository: $REPO - deleting..."
+      aws ecr delete-repository --repository-name $REPO --region $REGION --force 2>/dev/null || true
+    fi
   done
   echo "✅ All remaining ECR repositories deleted"
 else
