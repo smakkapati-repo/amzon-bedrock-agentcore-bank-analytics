@@ -133,17 +133,7 @@ else
   echo "No remaining ECR repositories found"
 fi
 
-# Step 3: Delete AgentCore agent
-echo ""
-echo -e "${YELLOW}🗑️  Deleting AgentCore agent...${NC}"
-if command -v agentcore &> /dev/null; then
-  agentcore delete -a bank_iq_agent_v1 --force 2>/dev/null || echo "⚠️  Agent may not exist or already deleted"
-  echo "✅ AgentCore agent deleted"
-else
-  echo "⚠️  agentcore CLI not found, skipping agent deletion"
-fi
-
-# Step 4: Delete CloudFormation stacks
+# Step 3: Delete CloudFormation stacks
 echo ""
 echo -e "${YELLOW}🗑️  Deleting CloudFormation stacks...${NC}"
 echo "This will take 10-15 minutes..."
@@ -204,6 +194,16 @@ fi
 
 echo ""
 echo -e "${GREEN}✅ All stacks deleted successfully!${NC}"
+
+# Step 4: Delete AgentCore agent (AFTER stacks are deleted)
+echo ""
+echo -e "${YELLOW}🗑️  Deleting AgentCore agent...${NC}"
+if command -v agentcore &> /dev/null; then
+  agentcore delete -a bank_iq_agent_v1 --force 2>/dev/null || echo "⚠️  Agent may not exist or already deleted"
+  echo "✅ AgentCore agent deleted"
+else
+  echo "⚠️  agentcore CLI not found, skipping agent deletion"
+fi
 
 # Step 5: Empty and delete S3 buckets (AFTER stacks are deleted)
 echo ""
