@@ -47,8 +47,11 @@ export const CLOUDFRONT_URL = '$CLOUDFRONT_URL';
 EOF
 
 # Build and upload frontend
-echo "🚀 Building and uploading frontend..."
+echo "🚀 Installing dependencies..."
+npm install
+echo "🚀 Building frontend..."
 npm run build
+echo "🚀 Uploading to S3..."
 aws s3 sync build/ s3://$FRONTEND_BUCKET/ --delete
 
 # Get CloudFront URL
