@@ -93,6 +93,8 @@ Resources:
               OriginProtocolPolicy: http-only
               OriginSSLProtocols:
                 - TLSv1.2
+              OriginReadTimeout: 300  # 5 minutes for long-running AI queries
+              OriginKeepaliveTimeout: 60
             OriginCustomHeaders:
               - HeaderName: X-Custom-Header
                 HeaderValue: !Sub '${ProjectName}-backend'

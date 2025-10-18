@@ -85,6 +85,9 @@ Resources:
       Subnets: !Ref SubnetIds
       SecurityGroups:
         - !Ref ALBSecurityGroup
+      LoadBalancerAttributes:
+        - Key: idle_timeout.timeout_seconds
+          Value: '300'  # 5 minutes for long-running AI queries
       Tags:
         - Key: Name
           Value: !Sub '${ProjectName}-alb'
