@@ -53,11 +53,14 @@ else
 fi
 echo ""
 
+# Get the script directory to reference other scripts correctly
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+
 # Phase 1: Agent
 echo -e "${BLUE}┌─────────────────────────────────────────────────────────────┐${NC}"
 echo -e "${BLUE}│${NC} ${GREEN}[1/5]${NC} ${CYAN}Deploying AgentCore Agent...${NC}                        ${BLUE}│${NC}"
 echo -e "${BLUE}└─────────────────────────────────────────────────────────────┘${NC}"
-./phase1-agent.sh
+${SCRIPT_DIR}/phase1-agent.sh
 if [ $? -ne 0 ]; then
     echo -e "${RED}❌ Phase 1 failed${NC}"
     exit 1
@@ -73,7 +76,7 @@ INFRA_EXISTS=$(aws cloudformation describe-stacks --stack-name ${STACK_NAME}-inf
 if [ "$INFRA_EXISTS" = "yes" ]; then
   echo "✅ Infrastructure stack already exists - skipping"
 else
-  ./phase2-infrastructure.sh $STACK_NAME $REGION
+  ${SCRIPT_DIR}/phase2-infrastructure.sh $STACK_NAME $REGION
   if [ $? -ne 0 ]; then
       echo -e "${RED}❌ Phase 2 failed${NC}"
       exit 1
@@ -85,7 +88,7 @@ echo -e "${GREEN}✅ Phase 2 Complete!${NC}\n"
 echo -e "${BLUE}┌─────────────────────────────────────────────────────────────┐${NC}"
 echo -e "${BLUE}│${NC} ${GREEN}[3/5]${NC} ${CYAN}Building & Deploying Backend Container...${NC}           ${BLUE}│${NC}"
 echo -e "${BLUE}└─────────────────────────────────────────────────────────────┘${NC}"
-./phase3-backend.sh $STACK_NAME $REGION
+${SCRIPT_DIR}/phase3-backend.sh $STACK_NAME $REGION
 if [ $? -ne 0 ]; then
     echo -e "${RED}❌ Phase 3 failed${NC}"
     exit 1
@@ -96,7 +99,7 @@ echo -e "${GREEN}✅ Phase 3 Complete!${NC}\n"
 echo -e "${BLUE}┌─────────────────────────────────────────────────────────────┐${NC}"
 echo -e "${BLUE}│${NC} ${GREEN}[4/5]${NC} ${CYAN}Building & Deploying Frontend (React + S3)...${NC}       ${BLUE}│${NC}"
 echo -e "${BLUE}└─────────────────────────────────────────────────────────────┘${NC}"
-./phase4-frontend.sh $STACK_NAME $REGION
+${SCRIPT_DIR}/phase4-frontend.sh $STACK_NAME $REGION
 if [ $? -ne 0 ]; then
     echo -e "${RED}❌ Phase 4 failed${NC}"
     exit 1
