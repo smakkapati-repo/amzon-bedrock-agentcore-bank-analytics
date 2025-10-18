@@ -49,7 +49,7 @@ with Diagram(
     
 
     
-    with Cluster("AWS Cloud - BankIQ+ Platform", graph_attr={"bgcolor": "white", "style": "rounded", "color": "#232F3E"}):
+    with Cluster("AWS Cloud", graph_attr={"bgcolor": "#F7F9FC", "style": "rounded,dashed", "color": "#FF9900", "penwidth": "2"}):
         
         # Authentication
         with Cluster("Authentication", graph_attr={"bgcolor": "white", "style": "rounded"}):
