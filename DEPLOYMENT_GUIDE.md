@@ -367,10 +367,16 @@ To delete all resources:
 ```
 
 **Deletes:**
-- CloudFormation stacks
-- ECR images
-- S3 buckets
+- CloudFormation stacks (frontend, backend, infrastructure, auth)
+- Cognito User Pool and all users
+- ECR images and repositories
+- S3 buckets (with all contents)
+- ECS cluster and services
+- CloudFront distribution
 - AgentCore agent
+- All associated resources
+
+**⚠️ Warning**: This deletes the Cognito User Pool and all user accounts. Backup users if needed before cleanup.
 
 ## 📚 Additional Resources
 
