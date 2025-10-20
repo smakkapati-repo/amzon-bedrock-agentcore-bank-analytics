@@ -6,7 +6,7 @@ import AccountBalanceIcon from '@mui/icons-material/AccountBalance';
 import AnalyticsIcon from '@mui/icons-material/Analytics';
 import AssessmentIcon from '@mui/icons-material/Assessment';
 import LogoutIcon from '@mui/icons-material/Logout';
-import { Amplify } from '@aws-amplify/core';
+import { Amplify, Hub } from '@aws-amplify/core';
 import { fetchAuthSession, signOut, getCurrentUser, signInWithRedirect } from '@aws-amplify/auth';
 import { cognitoConfig } from './config';
 import Home from './components/Home';
@@ -82,6 +82,16 @@ function App() {
 
   useEffect(() => {
     checkAuth();
+    
+    // Listen for auth events
+    const hubListener = Hub.listen('auth', ({ payload }) => {
+      console.log('[Auth] Hub event:', payload.event);
+      if (payload.event === 'signInWithRedirect' || payload.event === 'signedIn') {
+        checkAuth();
+      }
+    });
+    
+    return () => hubListener();
   }, []);
 
   const checkAuth = async () => {
