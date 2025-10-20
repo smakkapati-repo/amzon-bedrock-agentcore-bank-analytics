@@ -82,12 +82,13 @@ cd peer-bank-analytics-agentic
 ```
 
 **What it does:**
-1. ✅ Deploys AgentCore agent with 12 tools
-2. ✅ Adds S3 permissions to agent role
-3. ✅ Creates VPC, ALB, ECS cluster
-4. ✅ Builds and deploys backend Docker image
-5. ✅ Builds and deploys React frontend
-6. ✅ Creates CloudFront distribution
+1. ✅ Deploys Cognito User Pool with Hosted UI
+2. ✅ Deploys AgentCore agent with 12 tools
+3. ✅ Adds S3 permissions to agent role
+4. ✅ Creates VPC, ALB, ECS cluster
+5. ✅ Builds and deploys backend Docker image with JWT verification
+6. ✅ Builds and deploys React frontend with AWS Amplify Auth
+7. ✅ Creates CloudFront distribution
 
 **Time:** ~15-20 minutes
 
@@ -152,6 +153,42 @@ curl -X POST https://$CLOUDFRONT_URL/api/invoke-agent \
 ```bash
 open https://$CLOUDFRONT_URL
 ```
+
+## 🔐 Authentication
+
+### Cognito User Pool
+BankIQ+ uses AWS Cognito for secure authentication:
+- **Self-Service Signup** - Users can create accounts via Hosted UI
+- **OAuth 2.0 + JWT** - Industry-standard authentication
+- **JWT Verification** - Backend validates tokens on every request
+- **Session Management** - Automatic token refresh
+
+### First Login
+1. Open CloudFront URL
+2. Click "Sign In with AWS Cognito"
+3. Click "Sign up" on Cognito Hosted UI
+4. Enter email and password
+5. Verify email (check spam folder)
+6. Login with credentials
+
+### Create Additional Users
+```bash
+aws cognito-idp admin-create-user \
+  --user-pool-id $(aws cloudformation describe-stacks --stack-name bankiq-auth --query 'Stacks[0].Outputs[?OutputKey==`UserPoolId`].OutputValue' --output text) \
+  --username user@example.com \
+  --user-attributes Name=email,Value=user@example.com Name=email_verified,Value=true \
+  --temporary-password TempPass123! \
+  --region us-east-1
+```
+
+### Authentication Flow
+1. User clicks "Sign In with AWS Cognito"
+2. Redirects to Cognito Hosted UI
+3. User enters credentials
+4. Cognito returns authorization code
+5. Amplify exchanges code for JWT tokens
+6. Frontend stores tokens and includes in API requests
+7. Backend verifies JWT signature on each request
 
 ## 🎨 Using the Platform
 
