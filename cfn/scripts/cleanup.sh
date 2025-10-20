@@ -154,11 +154,11 @@ MASTER_STACK_EXISTS=$(aws cloudformation describe-stacks --stack-name $STACK_NAM
 # Delete in correct dependency order:
 # 1. Frontend (depends on infra)
 # 2. Backend (depends on infra + auth)
-# 3. Infra (base infrastructure)
-# 4. Auth (Cognito - can be deleted last or kept)
+# 3. Auth (Cognito)
+# 4. Infra (base infrastructure - MUST BE LAST because others depend on its exports)
 # 5. Master (if exists, orchestrates nested stacks)
 
-echo "Deletion order: Frontend → Backend → Infra → Auth → Master"
+echo "Deletion order: Frontend → Backend → Auth → Infra → Master"
 echo ""
 
 if [ "$FRONTEND_STACK_EXISTS" = "yes" ]; then
@@ -179,16 +179,6 @@ if [ "$BACKEND_STACK_EXISTS" = "yes" ]; then
   echo ""
 fi
 
-# Infra must be deleted AFTER frontend and backend because they depend on its exports
-if [ "$INFRA_STACK_EXISTS" = "yes" ]; then
-  echo "Deleting ${STACK_NAME}-infra stack (base infrastructure)..."
-  aws cloudformation delete-stack --stack-name ${STACK_NAME}-infra --region $REGION
-  echo -e "${YELLOW}⏳ Waiting for infra stack deletion...${NC}"
-  aws cloudformation wait stack-delete-complete --stack-name ${STACK_NAME}-infra --region $REGION 2>/dev/null || echo "⚠️  Infra stack deletion completed with warnings"
-  echo -e "${GREEN}✅ Infra stack deleted${NC}"
-  echo ""
-fi
-
 # Auth stack (Cognito) - delete after backend since backend depends on it
 AUTH_STACK_EXISTS=$(aws cloudformation describe-stacks --stack-name ${STACK_NAME}-auth --region $REGION >/dev/null 2>&1 && echo "yes" || echo "no")
 if [ "$AUTH_STACK_EXISTS" = "yes" ]; then
@@ -197,6 +187,16 @@ if [ "$AUTH_STACK_EXISTS" = "yes" ]; then
   echo -e "${YELLOW}⏳ Waiting for auth stack deletion...${NC}"
   aws cloudformation wait stack-delete-complete --stack-name ${STACK_NAME}-auth --region $REGION 2>/dev/null || echo "⚠️  Auth stack deletion completed with warnings"
   echo -e "${GREEN}✅ Auth stack deleted${NC}"
+  echo ""
+fi
+
+# Infra must be deleted LAST because frontend and backend depend on its exports
+if [ "$INFRA_STACK_EXISTS" = "yes" ]; then
+  echo "Deleting ${STACK_NAME}-infra stack (base infrastructure - LAST)..."
+  aws cloudformation delete-stack --stack-name ${STACK_NAME}-infra --region $REGION
+  echo -e "${YELLOW}⏳ Waiting for infra stack deletion...${NC}"
+  aws cloudformation wait stack-delete-complete --stack-name ${STACK_NAME}-infra --region $REGION 2>/dev/null || echo "⚠️  Infra stack deletion completed with warnings"
+  echo -e "${GREEN}✅ Infra stack deleted${NC}"
   echo ""
 fi
 
