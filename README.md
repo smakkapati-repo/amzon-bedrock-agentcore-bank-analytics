@@ -1,5 +1,5 @@
-# BankIQ+ - AI Banking Analytics Platform  
-**Powered by Amazon Bedrock AgentCore**
+# BankIQ+ - AI Banking Analytics Platform (**Powered by Amazon Bedrock AgentCore**) 
+
 
 **Authors:** Shashi Makkapati, Senthil Kamala Rathinam, Jacob Scheatzle
 
