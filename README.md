@@ -72,7 +72,7 @@ Security is embedded throughout: [AWS Cognito](https://docs.aws.amazon.com/cogni
 - **[Claude Sonnet 4.5](https://www.anthropic.com/claude)** - Foundation model for natural language understanding and reasoning
 
 ### Application Stack
-- **Authentication**: [AWS Cognito](https://docs.aws.amazon.com/cognito/) + [AWS Amplify v6](https://docs.amplify.aws/) (OAuth 2.0 + JWT)
+- **Authentication**: [AWS Cognito](https://docs.aws.amazon.com/cognito/) + [AWS Amplify v6](https://aws.amazon.com/amplify/) (OAuth 2.0 + JWT)
 - **Backend**: [Express.js](https://expressjs.com/) (Node.js) + Python agent
 - **Frontend**: [React](https://react.dev/) + [Material-UI](https://mui.com/) + AWS Amplify Auth
 - **Infrastructure**: [ECS Fargate](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/AWS_Fargate.html), [ALB](https://docs.aws.amazon.com/elasticloadbalancing/latest/application/), [CloudFront](https://docs.aws.amazon.com/cloudfront/), [S3](https://docs.aws.amazon.com/s3/)
