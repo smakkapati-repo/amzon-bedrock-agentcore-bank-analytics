@@ -221,14 +221,14 @@ See `backend/README_AGENT.md` for details.
 
 **Step 1: Clone Repository**
 ```bash
-git clone https://github.com/smakkapati-repo/peer-bank-analytics-agentic.git
-cd peer-bank-analytics-agentic
+git clone https://github.com/smakkapati-repo/amzon-bedrock-agentcore-bank-analytics.git
+cd amzon-bedrock-agentcore-bank-analytics
 ```
 
 **Step 2: Install AgentCore CLI**
 ```bash
 pip install bedrock-agentcore-starter-toolkit
-agentcore --version  # Verify installation
+agentcore --help  # Verify installation
 ```
 
 **Step 3: Configure AWS CLI**
@@ -246,38 +246,53 @@ aws configure
 ```
 
 **Deployment Progress:**
-- 🔵 **[1/4] AgentCore Agent** (~3-5 minutes)
-  - Builds and deploys Python agent with 12 tools
-  - Adds S3 permissions automatically
-  - Creates conversational memory
+- 🔵 **[0/5] Auth (Cognito)** (~2-3 minutes)
+  - Creates Cognito User Pool
+  - Configures OAuth 2.0 authentication
+  - Sets up Hosted UI
 
-- 🔵 **[2/4] Infrastructure** (~5-7 minutes)
+- 🔵 **[1/5] Infrastructure** (~5-7 minutes)
   - VPC with public/private subnets
   - Application Load Balancer
   - ECS cluster
   - S3 buckets
+  - ECR repositories
 
-- 🔵 **[3/4] Backend** (~3-5 minutes)
+- 🔵 **[2/5] AgentCore Agent** (~5-7 minutes)
+  - Builds and deploys Python agent with 12 tools
+  - Adds S3 permissions automatically
+  - Creates conversational memory
+
+- 🔵 **[3/5] Backend** (~3-5 minutes)
   - Builds Docker image
   - Pushes to ECR
   - Deploys ECS service
 
-- 🔵 **[4/4] Frontend** (~2-3 minutes)
+- 🔵 **[4/5] Frontend** (~2-3 minutes)
   - Builds React app
   - Uploads to S3
   - Creates CloudFront distribution
 
-**Total Time**: ~15-20 minutes
+- 🔵 **[5/5] Update Cognito** (~1 minute)
+  - Updates callback URLs with CloudFront URL
+  - Configures OAuth settings
+
+**Total Time**: ~20-25 minutes
 
 **Step 5: Access Your Application**
 
 After deployment completes, you'll see:
 ```
-✅ DEPLOYMENT COMPLETE!
-🌐 CloudFront URL: https://d2mlfyaj7qolx.cloudfront.net
+✅ DEPLOYMENT COMPLETE WITH COGNITO!
+🌐 Application URL: https://[your-cloudfront-url].cloudfront.net
+🔐 Login URL: https://bankiq-auth-[account-id].auth.us-east-1.amazoncognito.com
 ```
 
-Open the CloudFront URL in your browser to access BankIQ+!
+**Next Steps:**
+1. Visit the Application URL
+2. Click 'Sign In with AWS Cognito'
+3. Click 'Sign up' to create your account
+4. Verify your email and log in
 
 ## 🔍 Verify Deployment
 
