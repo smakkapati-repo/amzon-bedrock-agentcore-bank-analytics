@@ -16,7 +16,21 @@ import Login from './components/Login';
 
 // Configure Amplify with Cognito
 Amplify.configure({
-  Auth: cognitoConfig
+  Auth: {
+    Cognito: {
+      userPoolId: cognitoConfig.userPoolId,
+      userPoolClientId: cognitoConfig.userPoolWebClientId,
+      loginWith: {
+        oauth: {
+          domain: cognitoConfig.oauth.domain,
+          scopes: cognitoConfig.oauth.scope,
+          redirectSignIn: [cognitoConfig.oauth.redirectSignIn],
+          redirectSignOut: [cognitoConfig.oauth.redirectSignOut],
+          responseType: cognitoConfig.oauth.responseType
+        }
+      }
+    }
+  }
 });
 console.log('[Auth] Cognito authentication enabled');
 
