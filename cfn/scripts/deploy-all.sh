@@ -27,7 +27,7 @@ echo ""
 echo -e "${BLUE}┌─────────────────────────────────────────────────────────────┐${NC}"
 echo -e "${BLUE}│${NC} ${GREEN}[1/4]${NC} ${CYAN}Deploying AgentCore Agent...${NC}                        ${BLUE}│${NC}"
 echo -e "${BLUE}└─────────────────────────────────────────────────────────────┘${NC}"
-bash phase1-agent.sh
+bash $(dirname $0)/phase1-agent.sh
 if [ $? -ne 0 ]; then
     echo -e "${RED}❌ Phase 1 failed${NC}"
     exit 1
@@ -38,7 +38,7 @@ echo -e "${GREEN}✅ Phase 1 Complete!${NC}\n"
 echo -e "${BLUE}┌─────────────────────────────────────────────────────────────┐${NC}"
 echo -e "${BLUE}│${NC} ${GREEN}[2/4]${NC} ${CYAN}Deploying Infrastructure (VPC, ALB, ECS)...${NC}         ${BLUE}│${NC}"
 echo -e "${BLUE}└─────────────────────────────────────────────────────────────┘${NC}"
-bash phase2-infrastructure.sh $STACK_NAME $REGION
+bash $(dirname $0)/phase2-infrastructure.sh $STACK_NAME $REGION
 if [ $? -ne 0 ]; then
     echo -e "${RED}❌ Phase 2 failed${NC}"
     exit 1
@@ -49,7 +49,7 @@ echo -e "${GREEN}✅ Phase 2 Complete!${NC}\n"
 echo -e "${BLUE}┌─────────────────────────────────────────────────────────────┐${NC}"
 echo -e "${BLUE}│${NC} ${GREEN}[3/4]${NC} ${CYAN}Building & Deploying Backend Container...${NC}           ${BLUE}│${NC}"
 echo -e "${BLUE}└─────────────────────────────────────────────────────────────┘${NC}"
-bash phase3-backend.sh $STACK_NAME $REGION
+bash $(dirname $0)/phase3-backend.sh $STACK_NAME $REGION
 if [ $? -ne 0 ]; then
     echo -e "${RED}❌ Phase 3 failed${NC}"
     exit 1
@@ -60,7 +60,7 @@ echo -e "${GREEN}✅ Phase 3 Complete!${NC}\n"
 echo -e "${BLUE}┌─────────────────────────────────────────────────────────────┐${NC}"
 echo -e "${BLUE}│${NC} ${GREEN}[4/4]${NC} ${CYAN}Building & Deploying Frontend (React + S3)...${NC}       ${BLUE}│${NC}"
 echo -e "${BLUE}└─────────────────────────────────────────────────────────────┘${NC}"
-bash phase4-frontend.sh $STACK_NAME $REGION
+bash $(dirname $0)/phase4-frontend.sh $STACK_NAME $REGION
 if [ $? -ne 0 ]; then
     echo -e "${RED}❌ Phase 4 failed${NC}"
     exit 1
