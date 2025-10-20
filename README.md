@@ -61,8 +61,7 @@ Security is embedded throughout: [AWS Cognito](https://docs.aws.amazon.com/cogni
 
 ## 📖 Documentation
 
-- **[DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md)** - Complete deployment guide
-- **[COGNITO_SETUP.md](COGNITO_SETUP.md)** - Cognito authentication setup
+- **[DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md)** - Complete deployment guide with Cognito setup
 - **[backend/README_AGENT.md](backend/README_AGENT.md)** - Agent documentation
 - **[arch/](arch/)** - Architecture diagrams
 
