@@ -5,7 +5,7 @@ STACK_NAME=${1:-bankiq}
 REGION=${2:-us-east-1}
 
 echo "=========================================="
-echo "PHASE 4: Deploy Frontend"
+echo "Deploy Frontend"
 echo "=========================================="
 
 # Load dependencies
@@ -15,9 +15,12 @@ ALB_URL=$(cat /tmp/alb_url.txt)
 echo "Frontend Bucket: $FRONTEND_BUCKET"
 echo "Backend URL: $ALB_URL"
 
+# Get script directory
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+
 # Deploy frontend stack (CloudFront)
 echo "🚀 Deploying frontend stack..."
-cd ../templates
+cd "${SCRIPT_DIR}/../templates"
 aws cloudformation create-stack \
   --stack-name ${STACK_NAME}-frontend \
   --template-body file://frontend.yaml \
@@ -33,19 +36,40 @@ aws cloudformation wait stack-create-complete --stack-name ${STACK_NAME}-fronten
 # Get CloudFront URL
 CLOUDFRONT_URL=$(aws cloudformation describe-stacks --stack-name ${STACK_NAME}-frontend --region $REGION --query 'Stacks[0].Outputs[?OutputKey==`ApplicationUrl`].OutputValue' --output text)
 
-# Update frontend config with CloudFront URL (not ALB)
-echo "🚀 Configuring frontend with CloudFront URL..."
-cd ../../frontend
+# Get Cognito config
+COGNITO_USER_POOL_ID=$(aws cloudformation describe-stacks --stack-name ${STACK_NAME}-auth --region $REGION --query 'Stacks[0].Outputs[?OutputKey==`UserPoolId`].OutputValue' --output text)
+COGNITO_CLIENT_ID=$(aws cloudformation describe-stacks --stack-name ${STACK_NAME}-auth --region $REGION --query 'Stacks[0].Outputs[?OutputKey==`UserPoolClientId`].OutputValue' --output text)
+COGNITO_DOMAIN=$(aws cloudformation describe-stacks --stack-name ${STACK_NAME}-auth --region $REGION --query 'Stacks[0].Outputs[?OutputKey==`CognitoDomain`].OutputValue' --output text)
+
+# Update frontend config with CloudFront URL and Cognito
+echo "🚀 Configuring frontend with CloudFront URL and Cognito..."
+cd "${SCRIPT_DIR}/../../frontend"
 cat > src/config.js << EOF
-// Auto-generated - CloudFront + ECS Backend
+// Auto-generated - CloudFront + ECS Backend + Cognito Auth
 export const API_URL = '$CLOUDFRONT_URL';
 export const ENVIRONMENT = 'production';
 export const CLOUDFRONT_URL = '$CLOUDFRONT_URL';
+
+export const cognitoConfig = {
+  region: '$REGION',
+  userPoolId: '$COGNITO_USER_POOL_ID',
+  userPoolWebClientId: '$COGNITO_CLIENT_ID',
+  oauth: {
+    domain: '$COGNITO_DOMAIN',
+    scope: ['email', 'openid', 'profile'],
+    redirectSignIn: '$CLOUDFRONT_URL',
+    redirectSignOut: '$CLOUDFRONT_URL',
+    responseType: 'code'
+  }
+};
 EOF
 
 # Build and upload frontend
-echo "🚀 Building and uploading frontend..."
+echo "🚀 Installing dependencies..."
+npm install
+echo "🚀 Building frontend..."
 npm run build
+echo "🚀 Uploading to S3..."
 aws s3 sync build/ s3://$FRONTEND_BUCKET/ --delete
 
 # Get CloudFront URL

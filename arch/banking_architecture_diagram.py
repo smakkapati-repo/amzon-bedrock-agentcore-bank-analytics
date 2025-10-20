@@ -4,7 +4,7 @@ from diagrams.aws.network import InternetGateway, ElasticLoadBalancing, VPC, Clo
 from diagrams.aws.storage import S3
 from diagrams.aws.ml import Bedrock
 from diagrams.aws.management import Cloudwatch
-from diagrams.aws.security import IAM
+from diagrams.aws.security import IAM, Cognito
 from diagrams.aws.general import User
 from diagrams.onprem.client import Users as ExternalUsers
 from diagrams.onprem.compute import Server
@@ -45,24 +45,22 @@ with Diagram(
     filename="bankiq_plus_agentcore_architecture"
 ):
     
-    with Cluster("External Data Sources", graph_attr={"bgcolor": "white", "style": "rounded", "rankdir": "LR"}):
-        fdic_api = Server("FDIC Call Reports\n2024-2025 Data")
-        sec_api = Server("SEC EDGAR API\nLive Filings")
-        
-        fdic_api - sec_api
-    
     users = ExternalUsers("Banking Analysts\n& Executives")
     
 
     
-    with Cluster("AWS Cloud - BankIQ+ Platform", graph_attr={"bgcolor": "white", "style": "rounded", "color": "#232F3E"}):
+    with Cluster("AWS Cloud", graph_attr={"bgcolor": "#F7F9FC", "style": "rounded,dashed", "color": "#FF9900", "penwidth": "2"}):
+        
+        # Authentication
+        with Cluster("Authentication", graph_attr={"bgcolor": "white", "style": "rounded"}):
+            cognito = Cognito("Cognito User Pool\nHosted UI + JWT\nSelf-Service Signup")
         
         # CloudFront CDN
         cloudfront = CloudFront("CloudFront CDN\n300s Timeout")
         
         # Frontend Storage
         with Cluster("Frontend", graph_attr={"bgcolor": "white", "style": "rounded"}):
-            s3_frontend = S3("S3 Bucket\nReact App (Static)")
+            s3_frontend = S3("S3 Bucket\nReact App (Static)\nAmplify Auth")
         
         # VPC
         with Cluster("VPC - Multi-AZ", graph_attr={"bgcolor": "white", "style": "rounded"}):
@@ -73,7 +71,7 @@ with Diagram(
             
             # Private Subnets
             with Cluster("Private Subnets - ECS Fargate", graph_attr={"bgcolor": "white", "style": "rounded"}):
-                ecs_backend = Fargate("Backend Container\nNode.js Express\n12 AI Tools")
+                ecs_backend = Fargate("Backend Container\nNode.js Express\n12 AI Tools\nJWT Verification")
             
             # Data Services
             with Cluster("Storage", graph_attr={"bgcolor": "white", "style": "rounded"}):
@@ -94,27 +92,28 @@ with Diagram(
             
             cloudwatch - iam
     
-    # Step 1: User to CloudFront
-    users >> Edge(label="1. HTTPS Request", color="#FF9900", style="bold") >> cloudfront
+    # Step 1: User Authentication
+    users >> Edge(label="1a. Login/Signup", color="#FF9900", style="bold") >> cognito
+    cognito >> Edge(label="1b. JWT Token", color="#FF9900", style="dashed") >> users
     
-    # Step 2: CloudFront to S3 (static files)
-    cloudfront >> Edge(label="2a. Static Files\n(/, /static/*)", color="#4CAF50") >> s3_frontend
+    # Step 2: User to CloudFront
+    users >> Edge(label="2. HTTPS Request\n+ JWT Token", color="#FF9900", style="bold") >> cloudfront
     
-    # Step 3: CloudFront to ALB (API calls)
-    cloudfront >> Edge(label="2b. API Calls\n(/api/*, HTTP)", color="#2196F3") >> alb
+    # Step 3: CloudFront to S3 (static files)
+    cloudfront >> Edge(label="3a. Static Files\n(/, /static/*)", color="#4CAF50") >> s3_frontend
     
-    # Step 4: ALB to ECS Backend
-    alb >> Edge(label="3. Route to Backend", color="#9C27B0") >> ecs_backend
+    # Step 4: CloudFront to ALB (API calls)
+    cloudfront >> Edge(label="3b. API Calls\n(/api/*, HTTP)", color="#2196F3") >> alb
     
-    # Step 5: Backend to AgentCore
-    ecs_backend >> Edge(label="4. Invoke Agent\n(HTTPS + SigV4)", color="#FF5722") >> agentcore
+    # Step 5: ALB to ECS Backend (with JWT verification)
+    alb >> Edge(label="4. Route to Backend\n+ Verify JWT", color="#9C27B0") >> ecs_backend
+    ecs_backend >> Edge(label="Verify Token", color="#9C27B0", style="dashed") >> cognito
     
-    # Step 6: AgentCore to Claude
-    agentcore >> Edge(label="5. AI Analysis", color="#E91E63") >> claude
+    # Step 6: Backend to AgentCore
+    ecs_backend >> Edge(label="5. Invoke Agent\n(HTTPS + SigV4)", color="#FF5722") >> agentcore
     
-    # Step 7: External Data
-    agentcore >> Edge(label="6a. FDIC Data", color="#00BCD4") >> fdic_api
-    agentcore >> Edge(label="6b. SEC Filings", color="#00BCD4") >> sec_api
+    # Step 7: AgentCore to Claude
+    agentcore >> Edge(label="6. AI Analysis", color="#E91E63") >> claude
     
     # Step 8: Document Storage
     ecs_backend >> Edge(label="7. Upload Docs", color="#FF9800") >> s3_docs
@@ -127,3 +126,14 @@ with Diagram(
     ecs_backend >> Edge(label="Logs & Metrics", color="#607D8B") >> cloudwatch
     agentcore >> Edge(label="Logs & Traces", color="#607D8B") >> cloudwatch
     ecs_backend >> Edge(label="IAM Permissions", color="#607D8B", style="dashed") >> iam
+    
+    # External Data Sources (at bottom)
+    with Cluster("External Data Sources", graph_attr={"bgcolor": "white", "style": "rounded"}):
+        fdic_api = Server("FDIC Call Reports\n2024-2025 Data")
+        sec_api = Server("SEC EDGAR API\nLive Filings")
+        
+        fdic_api - sec_api
+    
+    # Step 9: External Data
+    agentcore >> Edge(label="9a. FDIC Data", color="#00BCD4") >> fdic_api
+    agentcore >> Edge(label="9b. SEC Filings", color="#00BCD4") >> sec_api

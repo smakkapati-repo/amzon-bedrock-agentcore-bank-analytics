@@ -189,6 +189,13 @@ Resources:
             - Name: UPLOADED_DOCS_BUCKET
               Value:
                 Fn::ImportValue: !Sub '${PrerequisitesStackName}-UploadedDocsBucket'
+            - Name: AUTH_ENABLED
+              Value: 'true'
+            - Name: COGNITO_REGION
+              Value: !Ref AWS::Region
+            - Name: COGNITO_USER_POOL_ID
+              Value:
+                Fn::ImportValue: bankiq-auth-UserPoolId
           LogConfiguration:
             LogDriver: awslogs
             Options:

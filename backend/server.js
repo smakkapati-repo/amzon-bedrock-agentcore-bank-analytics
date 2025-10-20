@@ -4,12 +4,20 @@ const AWS = require('aws-sdk');
 const https = require('https');
 const { spawn } = require('child_process');
 const path = require('path');
+const { verifyToken } = require('./auth-middleware');
 
 // Configure AWS SDK - will automatically use ECS task role
 AWS.config.update({ region: process.env.REGION || 'us-east-1' });
 
 const app = express();
 const PORT = process.env.PORT || 3001;
+
+// Log auth configuration
+const AUTH_ENABLED = process.env.AUTH_ENABLED === 'true';
+console.log(`[Auth] Authentication ${AUTH_ENABLED ? 'ENABLED' : 'DISABLED'}`);
+if (AUTH_ENABLED) {
+  console.log(`[Auth] User Pool ID: ${process.env.COGNITO_USER_POOL_ID}`);
+}
 
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
@@ -34,8 +42,8 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'healthy', service: 'BankIQ+ Backend' });
 });
 
-// Main agent invocation endpoint
-app.post('/api/invoke-agent', async (req, res) => {
+// Main agent invocation endpoint (protected)
+app.post('/api/invoke-agent', verifyToken, async (req, res) => {
   const { inputText, sessionId } = req.body;
 
   if (!inputText) {
@@ -155,8 +163,8 @@ app.post('/api/store-csv-data', (req, res) => {
   res.json({ success: true, message: 'CSV data received', rows: data.length });
 });
 
-// Analyze local CSV data endpoint
-app.post('/api/analyze-local-data', async (req, res) => {
+// Analyze local CSV data endpoint (protected)
+app.post('/api/analyze-local-data', verifyToken, async (req, res) => {
   const { data, baseBank, peerBanks, metric } = req.body;
   
   console.log(`[${new Date().toISOString()}] Analyzing local CSV data: ${baseBank} vs ${peerBanks.join(', ')} on ${metric}`);
@@ -535,8 +543,8 @@ app.post('/api/search-banks', async (req, res) => {
   }
 });
 
-// Async job submission endpoint
-app.post('/api/jobs/submit', async (req, res) => {
+// Async job submission endpoint (protected)
+app.post('/api/jobs/submit', verifyToken, async (req, res) => {
   const { inputText, sessionId, jobType } = req.body;
 
   if (!inputText) {

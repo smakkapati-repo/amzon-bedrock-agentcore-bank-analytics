@@ -120,13 +120,19 @@ if [ -n "$AGENT_ECR" ]; then
   echo "✅ Agent ECR repository deleted"
 fi
 
-# Fallback: Find and delete any remaining bankiq ECR repositories
+# Fallback: Find and delete any remaining ECR repositories with stack name or variations
 echo -e "${YELLOW}🔍 Checking for any remaining ${STACK_NAME} ECR repositories...${NC}"
-REMAINING_REPOS=$(aws ecr describe-repositories --region $REGION --query "repositories[?contains(repositoryName, '${STACK_NAME}')].repositoryName" --output text 2>/dev/null || echo "")
+# Search for repositories containing stack name (handles both "bankiq" and "bank-iq" variations)
+STACK_NAME_PATTERN=$(echo "$STACK_NAME" | sed 's/-//g')
+REMAINING_REPOS=$(aws ecr describe-repositories --region $REGION --query "repositories[].repositoryName" --output text 2>/dev/null || echo "")
 if [ -n "$REMAINING_REPOS" ]; then
   for REPO in $REMAINING_REPOS; do
-    echo "Found repository: $REPO - deleting..."
-    aws ecr delete-repository --repository-name $REPO --region $REGION --force 2>/dev/null || true
+    # Check if repo name contains stack name (with or without hyphens)
+    REPO_NORMALIZED=$(echo "$REPO" | sed 's/-//g')
+    if [[ "$REPO_NORMALIZED" == *"$STACK_NAME_PATTERN"* ]]; then
+      echo "Found repository: $REPO - deleting..."
+      aws ecr delete-repository --repository-name $REPO --region $REGION --force 2>/dev/null || true
+    fi
   done
   echo "✅ All remaining ECR repositories deleted"
 else
@@ -147,11 +153,12 @@ MASTER_STACK_EXISTS=$(aws cloudformation describe-stacks --stack-name $STACK_NAM
 
 # Delete in correct dependency order:
 # 1. Frontend (depends on infra)
-# 2. Backend (depends on infra)
-# 3. Infra (base - must be deleted last)
-# 4. Master (if exists, orchestrates nested stacks)
+# 2. Backend (depends on infra + auth)
+# 3. Infra (base infrastructure)
+# 4. Auth (Cognito - can be deleted last or kept)
+# 5. Master (if exists, orchestrates nested stacks)
 
-echo "Deletion order: Frontend → Backend → Infra → Master"
+echo "Deletion order: Frontend → Backend → Infra → Auth → Master"
 echo ""
 
 if [ "$FRONTEND_STACK_EXISTS" = "yes" ]; then
@@ -182,6 +189,17 @@ if [ "$INFRA_STACK_EXISTS" = "yes" ]; then
   echo ""
 fi
 
+# Auth stack (Cognito) - delete after backend since backend depends on it
+AUTH_STACK_EXISTS=$(aws cloudformation describe-stacks --stack-name ${STACK_NAME}-auth --region $REGION >/dev/null 2>&1 && echo "yes" || echo "no")
+if [ "$AUTH_STACK_EXISTS" = "yes" ]; then
+  echo "Deleting ${STACK_NAME}-auth stack (Cognito)..."
+  aws cloudformation delete-stack --stack-name ${STACK_NAME}-auth --region $REGION
+  echo -e "${YELLOW}⏳ Waiting for auth stack deletion...${NC}"
+  aws cloudformation wait stack-delete-complete --stack-name ${STACK_NAME}-auth --region $REGION 2>/dev/null || echo "⚠️  Auth stack deletion completed with warnings"
+  echo -e "${GREEN}✅ Auth stack deleted${NC}"
+  echo ""
+fi
+
 # Master stack (if using nested stacks pattern)
 if [ "$MASTER_STACK_EXISTS" = "yes" ]; then
   echo "Deleting ${STACK_NAME} master stack..."
@@ -209,15 +227,51 @@ fi
 echo ""
 echo -e "${YELLOW}🗑️  Final cleanup: Deleting S3 buckets...${NC}"
 
+# Function to delete S3 bucket with all versions
+delete_bucket_with_versions() {
+  local BUCKET=$1
+  echo "Deleting bucket: $BUCKET"
+  
+  # Delete all current objects first
+  aws s3 rm s3://$BUCKET --recursive --region $REGION 2>/dev/null || true
+  
+  # Loop to delete all versions (in case there are more than 1000)
+  local HAS_VERSIONS="yes"
+  while [ "$HAS_VERSIONS" = "yes" ]; do
+    local VERSIONS=$(aws s3api list-object-versions --bucket $BUCKET --max-items 1000 --region $REGION --query='{Objects: Versions[].{Key:Key,VersionId:VersionId}}' 2>/dev/null)
+    
+    if [ "$VERSIONS" != "" ] && [ "$VERSIONS" != "{}" ] && [ "$VERSIONS" != '{"Objects":null}' ]; then
+      aws s3api delete-objects --bucket $BUCKET --delete "$VERSIONS" --region $REGION 2>/dev/null || true
+    else
+      HAS_VERSIONS="no"
+    fi
+  done
+  
+  # Loop to delete all delete markers
+  local HAS_MARKERS="yes"
+  while [ "$HAS_MARKERS" = "yes" ]; do
+    local MARKERS=$(aws s3api list-object-versions --bucket $BUCKET --max-items 1000 --region $REGION --query='{Objects: DeleteMarkers[].{Key:Key,VersionId:VersionId}}' 2>/dev/null)
+    
+    if [ "$MARKERS" != "" ] && [ "$MARKERS" != "{}" ] && [ "$MARKERS" != '{"Objects":null}' ]; then
+      aws s3api delete-objects --bucket $BUCKET --delete "$MARKERS" --region $REGION 2>/dev/null || true
+    else
+      HAS_MARKERS="no"
+    fi
+  done
+  
+  # Delete bucket
+  aws s3 rb s3://$BUCKET --region $REGION 2>/dev/null || true
+}
+
 if [ -n "$FRONTEND_BUCKET" ]; then
   echo -e "${YELLOW}🗑️  Deleting frontend S3 bucket: $FRONTEND_BUCKET${NC}"
-  aws s3 rb s3://$FRONTEND_BUCKET --force --region $REGION 2>/dev/null || true
+  delete_bucket_with_versions $FRONTEND_BUCKET
   echo "✅ Frontend bucket deleted"
 fi
 
 if [ -n "$DOCS_BUCKET" ]; then
   echo -e "${YELLOW}🗑️  Deleting uploaded docs S3 bucket: $DOCS_BUCKET${NC}"
-  aws s3 rb s3://$DOCS_BUCKET --force --region $REGION 2>/dev/null || true
+  delete_bucket_with_versions $DOCS_BUCKET
   echo "✅ Docs bucket deleted"
 fi
 
@@ -226,8 +280,8 @@ echo -e "${YELLOW}🔍 Checking for any remaining ${STACK_NAME} S3 buckets...${N
 REMAINING_BUCKETS=$(aws s3 ls --region $REGION | grep "${STACK_NAME}" | awk '{print $3}' || echo "")
 if [ -n "$REMAINING_BUCKETS" ]; then
   for BUCKET in $REMAINING_BUCKETS; do
-    echo "Found bucket: $BUCKET - deleting..."
-    aws s3 rb s3://$BUCKET --force --region $REGION 2>/dev/null || true
+    echo "Found bucket: $BUCKET - deleting with all versions..."
+    delete_bucket_with_versions $BUCKET
   done
   echo "✅ All remaining buckets deleted"
 else
@@ -260,15 +314,15 @@ echo -e "${GREEN}✨ Cleanup Complete!${NC}"
 echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 echo ""
 echo "Deleted resources:"
-echo "  ✅ CloudFormation stack: $STACK_NAME"
-echo "  ✅ All nested stacks"
-echo "  ✅ S3 buckets (frontend, uploaded-docs)"
+echo "  ✅ CloudFormation stacks: $STACK_NAME, ${STACK_NAME}-frontend, ${STACK_NAME}-backend, ${STACK_NAME}-infra, ${STACK_NAME}-auth"
+echo "  ✅ S3 buckets (frontend, uploaded-docs) with all versions"
 echo "  ✅ ECR repositories (backend, agent)"
 echo "  ✅ ECS cluster and services"
 echo "  ✅ CloudFront distribution"
 echo "  ✅ ALB and target groups"
-echo "  ✅ Security groups"
+echo "  ✅ VPC, subnets, security groups"
 echo "  ✅ IAM roles"
+echo "  ✅ Cognito User Pool"
 echo "  ✅ CloudWatch log groups"
 echo "  ✅ AgentCore agent"
 echo ""

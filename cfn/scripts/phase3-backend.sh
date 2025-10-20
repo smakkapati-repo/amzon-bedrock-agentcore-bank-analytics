@@ -5,7 +5,7 @@ STACK_NAME=${1:-bankiq}
 REGION=${2:-us-east-1}
 
 echo "=========================================="
-echo "PHASE 3: Deploy Backend"
+echo "Deploy Backend"
 echo "=========================================="
 
 # Load dependencies from previous phases
@@ -17,9 +17,12 @@ SUBNET_IDS=$(cat /tmp/subnet_ids.txt)
 echo "Agent ARN: $AGENT_ARN"
 echo "Backend ECR: $BACKEND_ECR"
 
+# Get script directory
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+
 # Build and push Docker image
 echo "🚀 Building backend Docker image..."
-cd ../../backend
+cd "${SCRIPT_DIR}/../../backend"
 aws ecr get-login-password --region $REGION | docker login --username AWS --password-stdin $(echo $BACKEND_ECR | cut -d'/' -f1)
 docker build --platform linux/amd64 -t $BACKEND_ECR:latest -f Dockerfile.backend .
 docker push $BACKEND_ECR:latest
@@ -27,7 +30,7 @@ echo "✅ Backend image pushed"
 
 # Deploy backend stack
 echo "🚀 Deploying backend stack..."
-cd ../cfn/templates
+cd "${SCRIPT_DIR}/../templates"
 aws cloudformation create-stack \
   --stack-name ${STACK_NAME}-backend \
   --template-body file://backend.yaml \
