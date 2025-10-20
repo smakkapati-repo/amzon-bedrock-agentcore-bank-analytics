@@ -15,6 +15,13 @@ if ! command -v agentcore &> /dev/null; then
     exit 1
 fi
 
+# Check if config exists, if not create it
+if [ ! -f ".bedrock_agentcore.yaml" ]; then
+    echo "⚙️  Config file not found, creating..."
+    agentcore configure --entrypoint bank_iq_agent_v1.py
+    echo "✅ Config file created"
+fi
+
 # Deploy agent
 echo "🚀 Deploying agent..."
 agentcore launch -a bank_iq_agent_v1 | tee /tmp/agent_deploy.log
