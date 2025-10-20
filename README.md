@@ -254,7 +254,8 @@ To delete all resources:
 ```
 
 This will remove:
-- ✅ CloudFormation stacks
+- ✅ CloudFormation stacks (frontend, backend, infrastructure, auth)
+- ✅ Cognito User Pool and all users
 - ✅ S3 buckets (with contents)
 - ✅ ECR images and repositories
 - ✅ ECS cluster and services
@@ -263,6 +264,8 @@ This will remove:
 - ✅ All associated resources
 
 **Time**: ~10-15 minutes
+
+**⚠️ Warning**: Deletes Cognito User Pool and all user accounts.
 
 ## 📝 Monitoring
 
