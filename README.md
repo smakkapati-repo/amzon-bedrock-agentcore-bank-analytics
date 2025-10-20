@@ -7,7 +7,7 @@
 
 ### Amazon Bedrock AgentCore + Strands Framework
 This is a **reference implementation** showcasing:
-- **Amazon Bedrock AgentCore** - AWS's newly launched managed agent runtime (announced 2024)
+- **Amazon Bedrock AgentCore** - AWS's newly launched managed agent runtime (announced October 2025)
 - **Strands Framework** - Python-based agent orchestration with 12 custom tools
 - **Production Architecture** - CloudFront + ECS + Cognito + AgentCore (no API Gateway)
 - **Conversational Memory** - Multi-turn conversations with context retention
