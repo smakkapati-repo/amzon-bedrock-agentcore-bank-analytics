@@ -122,8 +122,12 @@ if [ -n "$CLOUDFRONT_URL" ]; then
   aws cognito-idp update-user-pool-client \
     --user-pool-id $USER_POOL_ID \
     --client-id $CLIENT_ID \
-    --callback-urls "$CLOUDFRONT_URL" "http://localhost:3000" \
-    --logout-urls "$CLOUDFRONT_URL" "http://localhost:3000" \
+    --callback-urls "$CLOUDFRONT_URL" "${CLOUDFRONT_URL}/" "http://localhost:3000" \
+    --logout-urls "$CLOUDFRONT_URL" "${CLOUDFRONT_URL}/" "http://localhost:3000" \
+    --supported-identity-providers "COGNITO" \
+    --allowed-o-auth-flows "code" \
+    --allowed-o-auth-scopes "email" "openid" "profile" \
+    --allowed-o-auth-flows-user-pool-client \
     --region $REGION > /dev/null
   
   echo "✅ Cognito callback URLs updated"
