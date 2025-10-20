@@ -6,15 +6,16 @@ import AccountBalanceIcon from '@mui/icons-material/AccountBalance';
 import AnalyticsIcon from '@mui/icons-material/Analytics';
 import AssessmentIcon from '@mui/icons-material/Assessment';
 import LogoutIcon from '@mui/icons-material/Logout';
-import { Amplify, Hub } from '@aws-amplify/core';
-import { fetchAuthSession, signOut, getCurrentUser, signInWithRedirect } from '@aws-amplify/auth';
+import { Amplify } from 'aws-amplify';
+import { fetchAuthSession, signOut, signInWithRedirect } from 'aws-amplify/auth';
+import { Hub } from 'aws-amplify/utils';
 import { cognitoConfig } from './config';
 import Home from './components/Home';
 import PeerAnalytics from './components/PeerAnalytics';
 import FinancialReports from './components/FinancialReports';
 import Login from './components/Login';
 
-// Configure Amplify with Cognito
+// Configure Amplify v6
 Amplify.configure({
   Auth: {
     Cognito: {
@@ -31,8 +32,10 @@ Amplify.configure({
       }
     }
   }
+}, {
+  ssr: false
 });
-console.log('[Auth] Cognito authentication enabled');
+console.log('[Auth] Amplify configured');
 
 const theme = createTheme({
   palette: {
@@ -84,22 +87,35 @@ function App() {
     // Check if we have a code in the URL (OAuth callback)
     const urlParams = new URLSearchParams(window.location.search);
     const code = urlParams.get('code');
+    const error = urlParams.get('error');
+    
+    if (error) {
+      console.error('[Auth] OAuth error:', error, urlParams.get('error_description'));
+      setLoading(false);
+      return;
+    }
     
     if (code) {
       console.log('[Auth] OAuth code detected, waiting for token exchange...');
       // Give Amplify time to exchange the code for tokens
       setTimeout(() => {
         checkAuth();
-      }, 2000);
+      }, 3000);
     } else {
       checkAuth();
     }
     
     // Listen for auth events
     const hubListener = Hub.listen('auth', ({ payload }) => {
-      console.log('[Auth] Hub event:', payload.event);
+      console.log('[Auth] Hub event:', payload.event, payload);
       if (payload.event === 'signInWithRedirect' || payload.event === 'signedIn') {
         setTimeout(() => checkAuth(), 1000);
+      } else if (payload.event === 'signInWithRedirect_failure') {
+        console.error('[Auth] Sign in failed:', payload.data);
+        if (payload.data?.error) {
+          console.error('[Auth] Error details:', payload.data.error.message, payload.data.error.stack);
+        }
+        setLoading(false);
       }
     });
     
@@ -108,11 +124,24 @@ function App() {
 
   const checkAuth = async () => {
     try {
-      const user = await getCurrentUser();
-      console.log('[Auth] User authenticated via Cognito:', user);
-      setIsAuthenticated(true);
+      const session = await fetchAuthSession();
+      console.log('[Auth] Session check:', session);
+      
+      if (session.tokens?.idToken) {
+        console.log('[Auth] User authenticated via Cognito');
+        setIsAuthenticated(true);
+        
+        // Clean up OAuth code from URL after successful auth
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.has('code')) {
+          window.history.replaceState({}, document.title, window.location.pathname);
+        }
+      } else {
+        console.log('[Auth] No valid tokens found');
+        setIsAuthenticated(false);
+      }
     } catch (error) {
-      console.log('[Auth] No Cognito session found:', error.message);
+      console.log('[Auth] Session check failed:', error.message);
       setIsAuthenticated(false);
     }
     setLoading(false);
