@@ -81,13 +81,25 @@ function App() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    checkAuth();
+    // Check if we have a code in the URL (OAuth callback)
+    const urlParams = new URLSearchParams(window.location.search);
+    const code = urlParams.get('code');
+    
+    if (code) {
+      console.log('[Auth] OAuth code detected, waiting for token exchange...');
+      // Give Amplify time to exchange the code for tokens
+      setTimeout(() => {
+        checkAuth();
+      }, 2000);
+    } else {
+      checkAuth();
+    }
     
     // Listen for auth events
     const hubListener = Hub.listen('auth', ({ payload }) => {
       console.log('[Auth] Hub event:', payload.event);
       if (payload.event === 'signInWithRedirect' || payload.event === 'signedIn') {
-        checkAuth();
+        setTimeout(() => checkAuth(), 1000);
       }
     });
     
@@ -96,12 +108,12 @@ function App() {
 
   const checkAuth = async () => {
     try {
-      await getCurrentUser();
+      const user = await getCurrentUser();
+      console.log('[Auth] User authenticated via Cognito:', user);
       setIsAuthenticated(true);
-      console.log('[Auth] User authenticated via Cognito');
-    } catch {
+    } catch (error) {
+      console.log('[Auth] No Cognito session found:', error.message);
       setIsAuthenticated(false);
-      console.log('[Auth] No Cognito session found');
     }
     setLoading(false);
   };
