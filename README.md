@@ -1,4 +1,6 @@
 # BankIQ+ - AI Banking Analytics Platform
+**Powered by Amazon Bedrock AgentCore**
+
 **Authors:** Shashi Makkapati, Senthil Kamala Rathinam, Jacob Scheatzle
 
 > **Technology Showcase**: This project demonstrates the capabilities of **Amazon Bedrock AgentCore** (AWS's new managed agent runtime) and the **Strands framework** for building production-ready AI agents with tool orchestration, conversational memory, and enterprise-grade security.
