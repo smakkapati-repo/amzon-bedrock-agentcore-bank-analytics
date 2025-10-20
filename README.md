@@ -20,6 +20,7 @@ The AI agent can instantly correlate a bank's declining Net Interest Margin with
 
 ## ✨ Features
 
+- **Secure Authentication** - AWS Cognito with self-service signup
 - **Peer Bank Analytics** - FDIC data comparison
 - **Financial Reports** - SEC filings analysis
 - **CSV Upload** - Custom data analysis
@@ -30,9 +31,10 @@ The AI agent can instantly correlate a bank's declining Net Interest Margin with
 ![BankIQ+ AWS Architecture](arch/bankiq_plus_agentcore_architecture.png)
 
 **Key Components:**
+- **Cognito User Pool**: Secure authentication with Hosted UI and JWT tokens
 - **CloudFront CDN**: Global content delivery with 300-second timeout
 - **Application Load Balancer**: Routes API traffic to ECS containers
-- **ECS Fargate**: Serverless containers in private subnets
+- **ECS Fargate**: Serverless containers in private subnets with JWT verification
 - **AWS Bedrock AgentCore**: Managed AI agent runtime with 12 tools
 - **Claude Sonnet 4.5**: Advanced AI analysis and conversational memory
 - **S3 Storage**: Frontend hosting and document uploads
@@ -46,12 +48,13 @@ BankIQ+ follows a modern, cloud-native architecture built on AWS services with s
 
 The platform's intelligence comes from [AWS Bedrock AgentCore](https://docs.aws.amazon.com/bedrock/latest/userguide/agents.html), which orchestrates 12 specialized tools for banking analytics. The agent uses [Claude Sonnet 4.5](https://www.anthropic.com/claude) for natural language understanding and maintains conversational memory across sessions. External data integration includes FDIC APIs for real-time banking metrics and SEC EDGAR APIs for financial filings. Documents uploaded to S3 are analyzed using PyPDF2 for metadata extraction and Claude for comprehensive analysis.
 
-Security is embedded throughout: Fargate containers run in private subnets, [IAM roles](https://docs.aws.amazon.com/IAM/latest/UserGuide/introduction.html) provide fine-grained access control, and [CloudWatch](https://docs.aws.amazon.com/cloudwatch/) enables comprehensive monitoring. The architecture eliminates API Gateway's 30-second timeout limitation, supporting long-running queries up to 300 seconds. Infrastructure is deployed through [CloudFormation](https://docs.aws.amazon.com/cloudformation/) templates, ensuring consistent, repeatable deployments.
+Security is embedded throughout: [AWS Cognito](https://docs.aws.amazon.com/cognito/) provides enterprise-grade authentication with OAuth 2.0 and JWT tokens, Fargate containers run in private subnets with JWT verification, [IAM roles](https://docs.aws.amazon.com/IAM/latest/UserGuide/introduction.html) provide fine-grained access control, and [CloudWatch](https://docs.aws.amazon.com/cloudwatch/) enables comprehensive monitoring. The architecture eliminates API Gateway's 30-second timeout limitation, supporting long-running queries up to 300 seconds. Infrastructure is deployed through [CloudFormation](https://docs.aws.amazon.com/cloudformation/) templates, ensuring consistent, repeatable deployments.
 
 ## 🛠️ Technology Stack
 
 - **AI**: AWS Bedrock AgentCore + Claude Sonnet 4.5
 - **Agent**: Strands framework
+- **Authentication**: AWS Cognito + AWS Amplify v6
 - **Backend**: Express.js + Python
 - **Frontend**: React + Material-UI
 - **Infrastructure**: ECS Fargate, ALB, CloudFront, S3
@@ -59,6 +62,7 @@ Security is embedded throughout: Fargate containers run in private subnets, [IAM
 ## 📖 Documentation
 
 - **[DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md)** - Complete deployment guide
+- **[COGNITO_SETUP.md](COGNITO_SETUP.md)** - Cognito authentication setup
 - **[backend/README_AGENT.md](backend/README_AGENT.md)** - Agent documentation
 - **[arch/](arch/)** - Architecture diagrams
 
