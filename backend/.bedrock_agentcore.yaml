@@ -11,7 +11,7 @@ agents:
       account: '164543933824'
       region: us-east-1
       ecr_repository: 164543933824.dkr.ecr.us-east-1.amazonaws.com/bedrock-agentcore-bankiq-agent-prod
-      ecr_auto_create: false
+      ecr_auto_create: true
       network_configuration:
         network_mode: PUBLIC
       protocol_configuration:
