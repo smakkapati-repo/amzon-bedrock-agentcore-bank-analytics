@@ -394,7 +394,7 @@ To delete all resources:
 4. Memory not working → Ensure consistent sessionId (33+ chars)
 
 **AWS Documentation:**
-- [AgentCore](https://docs.aws.amazon.com/bedrock/latest/userguide/agents.html)
+- [AgentCore](https://aws.amazon.com/bedrock/agentcore/)
 - [ECS Fargate](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/AWS_Fargate.html)
 - [CloudFront](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/Introduction.html)
 
