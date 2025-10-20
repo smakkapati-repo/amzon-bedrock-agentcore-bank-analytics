@@ -1,8 +1,20 @@
 # BankIQ+ - AI Banking Analytics Platform
 **Authors:** Shashi Makkapati, Senthil Kamala Rathinam, Jacob Scheatzle
 
-## Background & Strategic Context
+> **Technology Showcase**: This project demonstrates the capabilities of **AWS Bedrock AgentCore** (AWS's new managed agent runtime) and the **Strands framework** for building production-ready AI agents with tool orchestration, conversational memory, and enterprise-grade security.
 
+## 🚀 Why This Project Matters
+
+### AWS Bedrock AgentCore + Strands Framework
+This is a **reference implementation** showcasing:
+- **AWS Bedrock AgentCore** - AWS's newly launched managed agent runtime (announced 2024)
+- **Strands Framework** - Python-based agent orchestration with 12 custom tools
+- **Production Architecture** - CloudFront + ECS + Cognito + AgentCore (no API Gateway)
+- **Conversational Memory** - Multi-turn conversations with context retention
+- **Tool Orchestration** - Claude Sonnet 4.5 automatically selects from 12 specialized tools
+- **Enterprise Security** - JWT authentication, IAM roles, private subnets
+
+### Banking Analytics Use Case
 The advent of Generative AI has revolutionized how financial institutions process and interpret complex banking data. BankIQ+ represents a paradigm shift from traditional rule-based analytics to intelligent, context-aware financial analysis. By integrating AWS Bedrock AgentCore with Claude Sonnet 4.5, real-time FDIC data, and SEC EDGAR filings, the platform doesn't just present numbers—it understands relationships between metrics, identifies emerging trends, and generates human-like insights.
 
 The AI agent can instantly correlate a bank's declining Net Interest Margin with industry-wide patterns, explain strategic implications of capital changes, or predict potential regulatory concerns based on CRE concentration trends. This GenAI-powered approach transforms raw regulatory data into conversational insights, enabling bank executives to ask natural language questions like "Why is our ROA underperforming compared to similar-sized banks?" and receive comprehensive, contextual analysis that considers market conditions, regulatory environment, and peer performance.
@@ -52,12 +64,17 @@ Security is embedded throughout: [AWS Cognito](https://docs.aws.amazon.com/cogni
 
 ## 🛠️ Technology Stack
 
-- **AI**: AWS Bedrock AgentCore + Claude Sonnet 4.5
-- **Agent**: Strands framework
-- **Authentication**: AWS Cognito + AWS Amplify v6
-- **Backend**: Express.js + Python
-- **Frontend**: React + Material-UI
+### Core AI Platform (NEW AWS Services)
+- **AWS Bedrock AgentCore** - Managed agent runtime with built-in memory and tool orchestration
+- **Strands Framework** - Python agent framework for defining tools and workflows
+- **Claude Sonnet 4.5** - Foundation model for natural language understanding and reasoning
+
+### Application Stack
+- **Authentication**: AWS Cognito + AWS Amplify v6 (OAuth 2.0 + JWT)
+- **Backend**: Express.js (Node.js) + Python agent
+- **Frontend**: React + Material-UI + AWS Amplify Auth
 - **Infrastructure**: ECS Fargate, ALB, CloudFront, S3
+- **Security**: Private subnets, JWT verification, IAM roles, security groups
 
 ## 📖 Documentation
 
@@ -100,20 +117,67 @@ Security is embedded throughout: [AWS Cognito](https://docs.aws.amazon.com/cogni
 - **Loan-to-Deposit** - Loans as % of deposits
 - **CRE Concentration** - Commercial real estate loans as % of capital
 
-## 🎯 AI Agent Tools (12 total)
+## 🎯 AI Agent Tools (12 Custom Tools)
 
-1. `get_fdic_data` - Current FDIC banking data
+**Strands Framework Implementation** - Each tool is a Python function with:
+- Input/output schemas (Pydantic models)
+- Error handling and validation
+- Integration with external APIs (FDIC, SEC EDGAR)
+- S3 operations for document storage
+
+1. `get_fdic_data` - Current FDIC banking data (live API integration)
 2. `search_fdic_bank` - Search FDIC by bank name
-3. `compare_banks` - Peer performance comparison
-4. `get_sec_filings` - SEC EDGAR filings
-5. `generate_bank_report` - Comprehensive analysis
-6. `answer_banking_question` - General Q&A
-7. `search_banks` - Bank search by name/ticker
-8. `upload_csv_to_s3` - Upload CSV data
-9. `analyze_csv_peer_performance` - Analyze CSV
-10. `analyze_and_upload_pdf` - Upload and analyze PDFs
+3. `compare_banks` - Peer performance comparison with trend analysis
+4. `get_sec_filings` - SEC EDGAR filings (10-K, 10-Q)
+5. `generate_bank_report` - Comprehensive multi-metric analysis
+6. `answer_banking_question` - General Q&A with context
+7. `search_banks` - Bank search by name/ticker (500+ banks)
+8. `upload_csv_to_s3` - Upload CSV data with validation
+9. `analyze_csv_peer_performance` - Analyze custom CSV data
+10. `analyze_and_upload_pdf` - Upload and analyze PDFs (PyPDF2 + Claude)
 11. `analyze_uploaded_pdf` - Analyze PDFs in S3
-12. `chat_with_documents` - Chat with docs/filings
+12. `chat_with_documents` - Multi-turn document Q&A with memory
+
+**Tool Orchestration**: Claude Sonnet 4.5 automatically selects the right tool(s) based on user intent. For example:
+- "Compare JPMorgan and Bank of America ROA" → `compare_banks` tool
+- "What are Webster's key risks?" → `get_sec_filings` + `chat_with_documents` tools
+- "Analyze my custom peer data" → `upload_csv_to_s3` + `analyze_csv_peer_performance` tools
+
+## 🌟 AWS Bedrock AgentCore Highlights
+
+### What is AgentCore?
+AWS Bedrock AgentCore is a **managed agent runtime** that handles:
+- ✅ **Tool Orchestration** - Automatically routes requests to the right tools
+- ✅ **Conversational Memory** - Maintains context across multi-turn conversations
+- ✅ **Streaming Responses** - Real-time token streaming for better UX
+- ✅ **Error Handling** - Automatic retries and graceful degradation
+- ✅ **Observability** - Built-in CloudWatch logging and tracing
+- ✅ **Scalability** - Serverless, auto-scaling infrastructure
+
+### Why AgentCore vs. Custom Agent?
+| Feature | Custom Agent | AWS AgentCore |
+|---------|-------------|---------------|
+| Infrastructure | You manage | AWS manages |
+| Memory | Build yourself | Built-in |
+| Tool routing | Manual logic | Automatic (Claude) |
+| Scaling | Configure yourself | Auto-scales |
+| Monitoring | Setup CloudWatch | Pre-integrated |
+| Cost | EC2/Lambda costs | Pay per invocation |
+
+### Strands Framework Benefits
+- **Type Safety** - Pydantic schemas for all tool inputs/outputs
+- **Easy Testing** - Test tools independently before deployment
+- **Version Control** - Agent code in Git, deployed via CLI
+- **Hot Reload** - Update agent without infrastructure changes
+- **Local Development** - Test locally before deploying to AWS
+
+### Production-Ready Features
+1. **No API Gateway** - Direct CloudFront → ALB → ECS (300s timeout)
+2. **JWT Authentication** - Cognito User Pool with Hosted UI
+3. **Private Subnets** - ECS tasks run in private subnets with NAT
+4. **IAM Least Privilege** - Separate roles for ECS, AgentCore, and users
+5. **Multi-AZ Deployment** - High availability across availability zones
+6. **CloudWatch Monitoring** - Comprehensive logging and metrics
 
 ## ⚠️ CRITICAL: Dockerfile Naming
 
