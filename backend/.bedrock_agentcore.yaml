@@ -3,15 +3,15 @@ agents:
   bank_iq_agent_v1:
     name: bank_iq_agent_v1
     entrypoint: bank_iq_agent_v1.py
-    platform: linux/amd64
+    platform: linux/arm64
     container_runtime: docker
     aws:
       execution_role: arn:aws:iam::164543933824:role/AmazonBedrockAgentCoreSDKRuntime-us-east-1-491c2288f3
       execution_role_auto_create: false
       account: '164543933824'
       region: us-east-1
-      ecr_repository: 164543933824.dkr.ecr.us-east-1.amazonaws.com/bedrock-agentcore-bankiq-agent-prod
-      ecr_auto_create: true
+      ecr_repository: 164543933824.dkr.ecr.us-east-1.amazonaws.com/bedrock-agentcore-bank_iq_agent_v1
+      ecr_auto_create: false
       network_configuration:
         network_mode: PUBLIC
       protocol_configuration:
@@ -19,16 +19,17 @@ agents:
       observability:
         enabled: true
     bedrock_agentcore:
-      agent_id: bank_iq_agent_v1-Pj33ejA5b6
-      agent_arn: arn:aws:bedrock-agentcore:us-east-1:164543933824:runtime/bank_iq_agent_v1-Pj33ejA5b6
+      agent_id: bank_iq_agent_v1-Io4Wq5BU9X
+      agent_arn: arn:aws:bedrock-agentcore:us-east-1:164543933824:runtime/bank_iq_agent_v1-Io4Wq5BU9X
       agent_session_id: null
     codebuild:
+      project_name: bedrock-agentcore-bank_iq_agent_v1-builder
       execution_role: arn:aws:iam::164543933824:role/AmazonBedrockAgentCoreSDKCodeBuild-us-east-1-491c2288f3
       source_bucket: bedrock-agentcore-codebuild-sources-164543933824-us-east-1
     memory:
       mode: STM_ONLY
-      memory_id: bank_iq_agent_v1_mem-wYLp8gDOLK
-      memory_arn: arn:aws:bedrock-agentcore:us-east-1:164543933824:memory/bank_iq_agent_v1_mem-wYLp8gDOLK
+      memory_id: bank_iq_agent_v1_mem-j189dE2pOf
+      memory_arn: arn:aws:bedrock-agentcore:us-east-1:164543933824:memory/bank_iq_agent_v1_mem-j189dE2pOf
       memory_name: bank_iq_agent_v1_mem
       event_expiry_days: 30
       first_invoke_memory_check_done: false

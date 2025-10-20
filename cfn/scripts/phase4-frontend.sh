@@ -55,7 +55,7 @@ export const cognitoConfig = {
   userPoolId: '$COGNITO_USER_POOL_ID',
   userPoolWebClientId: '$COGNITO_CLIENT_ID',
   oauth: {
-    domain: '$COGNITO_DOMAIN',
+    domain: '$COGNITO_DOMAIN.auth.$REGION.amazoncognito.com',
     scope: ['email', 'openid', 'profile'],
     redirectSignIn: '$CLOUDFRONT_URL',
     redirectSignOut: '$CLOUDFRONT_URL',
