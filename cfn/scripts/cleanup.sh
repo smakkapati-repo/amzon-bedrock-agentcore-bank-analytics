@@ -139,7 +139,36 @@ else
   echo "No remaining ECR repositories found"
 fi
 
-# Step 3: Delete CloudFormation stacks
+# Step 3: Empty S3 buckets BEFORE deleting stacks
+echo ""
+echo -e "${YELLOW}🗑️  Emptying S3 buckets...${NC}"
+
+# Function to empty S3 bucket
+empty_bucket() {
+  local BUCKET=$1
+  echo "Emptying bucket: $BUCKET"
+  
+  # Delete all current objects
+  aws s3 rm s3://$BUCKET --recursive --region $REGION 2>/dev/null || true
+  
+  # Delete all versions
+  aws s3api delete-objects --bucket $BUCKET --delete "$(aws s3api list-object-versions --bucket $BUCKET --max-items 1000 --region $REGION --query='{Objects: Versions[].{Key:Key,VersionId:VersionId}}' 2>/dev/null)" --region $REGION 2>/dev/null || true
+  
+  # Delete all delete markers
+  aws s3api delete-objects --bucket $BUCKET --delete "$(aws s3api list-object-versions --bucket $BUCKET --max-items 1000 --region $REGION --query='{Objects: DeleteMarkers[].{Key:Key,VersionId:VersionId}}' 2>/dev/null)" --region $REGION 2>/dev/null || true
+}
+
+if [ -n "$FRONTEND_BUCKET" ]; then
+  empty_bucket $FRONTEND_BUCKET
+  echo "✅ Frontend bucket emptied"
+fi
+
+if [ -n "$DOCS_BUCKET" ]; then
+  empty_bucket $DOCS_BUCKET
+  echo "✅ Docs bucket emptied"
+fi
+
+# Step 4: Delete CloudFormation stacks
 echo ""
 echo -e "${YELLOW}🗑️  Deleting CloudFormation stacks...${NC}"
 echo "This will take 10-15 minutes..."
@@ -213,7 +242,7 @@ fi
 echo ""
 echo -e "${GREEN}✅ All stacks deleted successfully!${NC}"
 
-# Step 4: Delete AgentCore agent (AFTER stacks are deleted)
+# Step 5: Delete AgentCore agent (AFTER stacks are deleted)
 echo ""
 echo -e "${YELLOW}🗑️  Deleting AgentCore agent...${NC}"
 if command -v agentcore &> /dev/null; then
@@ -223,7 +252,7 @@ else
   echo "⚠️  agentcore CLI not found, skipping agent deletion"
 fi
 
-# Step 5: Empty and delete S3 buckets (AFTER stacks are deleted)
+# Step 6: Final S3 cleanup - delete any remaining buckets
 echo ""
 echo -e "${YELLOW}🗑️  Final cleanup: Deleting S3 buckets...${NC}"
 
@@ -288,7 +317,7 @@ else
   echo "No remaining buckets found"
 fi
 
-# Step 6: Clean up staging buckets (optional)
+# Step 7: Clean up staging buckets (optional)
 echo ""
 echo -e "${YELLOW}🔍 Checking for staging buckets...${NC}"
 STAGING_BUCKETS=$(aws s3 ls --region $REGION | grep "${STACK_NAME}-cfn-staging" | awk '{print $3}' || echo "")
@@ -307,7 +336,7 @@ else
   echo "No staging buckets found"
 fi
 
-# Step 7: Summary
+# Step 8: Summary
 echo ""
 echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 echo -e "${GREEN}✨ Cleanup Complete!${NC}"
