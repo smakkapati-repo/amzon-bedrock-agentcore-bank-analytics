@@ -246,7 +246,7 @@ echo -e "${GREEN}✅ All stacks deleted successfully!${NC}"
 echo ""
 echo -e "${YELLOW}🗑️  Deleting AgentCore agent...${NC}"
 if command -v agentcore &> /dev/null; then
-  agentcore delete -a bank_iq_agent_v1 --force 2>/dev/null || echo "⚠️  Agent may not exist or already deleted"
+  cd "$(dirname "$0")/../../backend" && agentcore destroy -a bank_iq_agent_v1 --force 2>/dev/null || echo "⚠️  Agent may not exist or already deleted"
   echo "✅ AgentCore agent deleted"
 else
   echo "⚠️  agentcore CLI not found, skipping agent deletion"
