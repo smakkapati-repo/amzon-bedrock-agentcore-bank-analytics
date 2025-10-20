@@ -1,13 +1,13 @@
 # BankIQ+ - AI Banking Analytics Platform
 **Authors:** Shashi Makkapati, Senthil Kamala Rathinam, Jacob Scheatzle
 
-> **Technology Showcase**: This project demonstrates the capabilities of **AWS Bedrock AgentCore** (AWS's new managed agent runtime) and the **Strands framework** for building production-ready AI agents with tool orchestration, conversational memory, and enterprise-grade security.
+> **Technology Showcase**: This project demonstrates the capabilities of **Amazon Bedrock AgentCore** (AWS's new managed agent runtime) and the **Strands framework** for building production-ready AI agents with tool orchestration, conversational memory, and enterprise-grade security.
 
 ## 🚀 Why This Project Matters
 
-### AWS Bedrock AgentCore + Strands Framework
+### Amazon Bedrock AgentCore + Strands Framework
 This is a **reference implementation** showcasing:
-- **AWS Bedrock AgentCore** - AWS's newly launched managed agent runtime (announced 2024)
+- **Amazon Bedrock AgentCore** - AWS's newly launched managed agent runtime (announced 2024)
 - **Strands Framework** - Python-based agent orchestration with 12 custom tools
 - **Production Architecture** - CloudFront + ECS + Cognito + AgentCore (no API Gateway)
 - **Conversational Memory** - Multi-turn conversations with context retention
@@ -15,7 +15,7 @@ This is a **reference implementation** showcasing:
 - **Enterprise Security** - JWT authentication, IAM roles, private subnets
 
 ### Banking Analytics Use Case
-The advent of Generative AI has revolutionized how financial institutions process and interpret complex banking data. BankIQ+ represents a paradigm shift from traditional rule-based analytics to intelligent, context-aware financial analysis. By integrating AWS Bedrock AgentCore with Claude Sonnet 4.5, real-time FDIC data, and SEC EDGAR filings, the platform doesn't just present numbers—it understands relationships between metrics, identifies emerging trends, and generates human-like insights.
+The advent of Generative AI has revolutionized how financial institutions process and interpret complex banking data. BankIQ+ represents a paradigm shift from traditional rule-based analytics to intelligent, context-aware financial analysis. By integrating Amazon Bedrock AgentCore with Claude Sonnet 4.5, real-time FDIC data, and SEC EDGAR filings, the platform doesn't just present numbers—it understands relationships between metrics, identifies emerging trends, and generates human-like insights.
 
 The AI agent can instantly correlate a bank's declining Net Interest Margin with industry-wide patterns, explain strategic implications of capital changes, or predict potential regulatory concerns based on CRE concentration trends. This GenAI-powered approach transforms raw regulatory data into conversational insights, enabling bank executives to ask natural language questions like "Why is our ROA underperforming compared to similar-sized banks?" and receive comprehensive, contextual analysis that considers market conditions, regulatory environment, and peer performance.
 
@@ -47,7 +47,7 @@ The AI agent can instantly correlate a bank's declining Net Interest Margin with
 - **CloudFront CDN**: Global content delivery with 300-second timeout
 - **Application Load Balancer**: Routes API traffic to ECS containers
 - **ECS Fargate**: Serverless containers in private subnets with JWT verification
-- **AWS Bedrock AgentCore**: Managed AI agent runtime with 12 tools
+- **Amazon Bedrock AgentCore**: Managed AI agent runtime with 12 tools
 - **Claude Sonnet 4.5**: Advanced AI analysis and conversational memory
 - **S3 Storage**: Frontend hosting and document uploads
 - **VPC with Multi-AZ**: High availability deployment
@@ -58,23 +58,23 @@ The AI agent can instantly correlate a bank's declining Net Interest Margin with
 
 BankIQ+ follows a modern, cloud-native architecture built on AWS services with security-first design. User requests flow through [CloudFront](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/Introduction.html) for global content delivery, routing static files from [S3](https://docs.aws.amazon.com/s3/) and API calls to the [Application Load Balancer](https://docs.aws.amazon.com/elasticloadbalancing/latest/application/introduction.html). The ALB distributes traffic to containerized applications running on [Amazon ECS Fargate](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/AWS_Fargate.html), eliminating server management while providing automatic scaling.
 
-The platform's intelligence comes from [AWS Bedrock AgentCore](https://docs.aws.amazon.com/bedrock/latest/userguide/agents.html), which orchestrates 12 specialized tools for banking analytics. The agent uses [Claude Sonnet 4.5](https://www.anthropic.com/claude) for natural language understanding and maintains conversational memory across sessions. External data integration includes FDIC APIs for real-time banking metrics and SEC EDGAR APIs for financial filings. Documents uploaded to S3 are analyzed using PyPDF2 for metadata extraction and Claude for comprehensive analysis.
+The platform's intelligence comes from [Amazon Bedrock AgentCore](https://docs.aws.amazon.com/bedrock/latest/userguide/agents.html), which orchestrates 12 specialized tools for banking analytics. The agent uses [Claude Sonnet 4.5](https://www.anthropic.com/claude) for natural language understanding and maintains conversational memory across sessions. External data integration includes FDIC APIs for real-time banking metrics and SEC EDGAR APIs for financial filings. Documents uploaded to S3 are analyzed using PyPDF2 for metadata extraction and Claude for comprehensive analysis.
 
 Security is embedded throughout: [AWS Cognito](https://docs.aws.amazon.com/cognito/) provides enterprise-grade authentication with OAuth 2.0 and JWT tokens, Fargate containers run in private subnets with JWT verification, [IAM roles](https://docs.aws.amazon.com/IAM/latest/UserGuide/introduction.html) provide fine-grained access control, and [CloudWatch](https://docs.aws.amazon.com/cloudwatch/) enables comprehensive monitoring. The architecture eliminates API Gateway's 30-second timeout limitation, supporting long-running queries up to 300 seconds. Infrastructure is deployed through [CloudFormation](https://docs.aws.amazon.com/cloudformation/) templates, ensuring consistent, repeatable deployments.
 
 ## 🛠️ Technology Stack
 
 ### Core AI Platform (NEW AWS Services)
-- **AWS Bedrock AgentCore** - Managed agent runtime with built-in memory and tool orchestration
-- **Strands Framework** - Python agent framework for defining tools and workflows
-- **Claude Sonnet 4.5** - Foundation model for natural language understanding and reasoning
+- **[Amazon Bedrock AgentCore](https://docs.aws.amazon.com/bedrock/latest/userguide/agents.html)** - Managed agent runtime with built-in memory and tool orchestration
+- **[Strands Framework](https://github.com/awslabs/agents-for-amazon-bedrock-sample-code)** - Python agent framework for defining tools and workflows
+- **[Claude Sonnet 4.5](https://www.anthropic.com/claude)** - Foundation model for natural language understanding and reasoning
 
 ### Application Stack
-- **Authentication**: AWS Cognito + AWS Amplify v6 (OAuth 2.0 + JWT)
-- **Backend**: Express.js (Node.js) + Python agent
-- **Frontend**: React + Material-UI + AWS Amplify Auth
-- **Infrastructure**: ECS Fargate, ALB, CloudFront, S3
-- **Security**: Private subnets, JWT verification, IAM roles, security groups
+- **Authentication**: [AWS Cognito](https://docs.aws.amazon.com/cognito/) + [AWS Amplify v6](https://docs.amplify.aws/) (OAuth 2.0 + JWT)
+- **Backend**: [Express.js](https://expressjs.com/) (Node.js) + Python agent
+- **Frontend**: [React](https://react.dev/) + [Material-UI](https://mui.com/) + AWS Amplify Auth
+- **Infrastructure**: [ECS Fargate](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/AWS_Fargate.html), [ALB](https://docs.aws.amazon.com/elasticloadbalancing/latest/application/), [CloudFront](https://docs.aws.amazon.com/cloudfront/), [S3](https://docs.aws.amazon.com/s3/)
+- **Security**: [VPC](https://docs.aws.amazon.com/vpc/) private subnets, JWT verification, [IAM roles](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles.html), [Security Groups](https://docs.aws.amazon.com/vpc/latest/userguide/vpc-security-groups.html)
 
 ## 📖 Documentation
 
@@ -143,10 +143,10 @@ Security is embedded throughout: [AWS Cognito](https://docs.aws.amazon.com/cogni
 - "What are Webster's key risks?" → `get_sec_filings` + `chat_with_documents` tools
 - "Analyze my custom peer data" → `upload_csv_to_s3` + `analyze_csv_peer_performance` tools
 
-## 🌟 AWS Bedrock AgentCore Highlights
+## 🌟 Amazon Bedrock AgentCore Highlights
 
 ### What is AgentCore?
-AWS Bedrock AgentCore is a **managed agent runtime** that handles:
+Amazon Bedrock AgentCore is a **managed agent runtime** that handles:
 - ✅ **Tool Orchestration** - Automatically routes requests to the right tools
 - ✅ **Conversational Memory** - Maintains context across multi-turn conversations
 - ✅ **Streaming Responses** - Real-time token streaming for better UX
@@ -155,7 +155,7 @@ AWS Bedrock AgentCore is a **managed agent runtime** that handles:
 - ✅ **Scalability** - Serverless, auto-scaling infrastructure
 
 ### Why AgentCore vs. Custom Agent?
-| Feature | Custom Agent | AWS AgentCore |
+| Feature | Custom Agent | Amazon Bedrock AgentCore |
 |---------|-------------|---------------|
 | Infrastructure | You manage | AWS manages |
 | Memory | Build yourself | Built-in |
