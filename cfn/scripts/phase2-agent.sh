@@ -37,7 +37,7 @@ if agentcore status 2>/dev/null | grep -q "Agent ARN:"; then
 else
     # Deploy new agent
     echo "Deploying new agent..."
-    PYTHONIOENCODING=utf-8 agentcore launch -a bank_iq_agent_v1 2>&1 | tee /tmp/agent_deploy.log
+    PYTHONIOENCODING=utf-8 agentcore launch -a bank_iq_agent_v1 --auto-update-on-conflict 2>&1 | tee /tmp/agent_deploy.log
     
     # Extract agent ARN from deployment log
     AGENT_ARN=$(grep -oE 'arn:aws:bedrock-agentcore:[^[:space:]]+:runtime/bank_iq_agent_v1-[a-zA-Z0-9]+' /tmp/agent_deploy.log | head -1)
