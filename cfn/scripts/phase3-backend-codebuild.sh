@@ -104,7 +104,7 @@ Resources:
           - Name: IMAGE_TAG
             Value: latest
       Source:
-        Type: S3
+        Type: NO_SOURCE
         BuildSpec: |
           version: 0.2
           phases:
@@ -130,16 +130,30 @@ Outputs:
     Value: !Ref BackendCodeBuildProject
 EOF
 
-# Deploy CodeBuild stack
-aws cloudformation create-stack \
-  --stack-name ${STACK_NAME}-backend-codebuild \
-  --template-body file://"$TEMP_DIR/backend-codebuild.yaml" \
-  --parameters ParameterKey=ProjectName,ParameterValue=$STACK_NAME \
-  --capabilities CAPABILITY_NAMED_IAM \
-  --region $REGION
-
-echo "⏳ Waiting for CodeBuild project creation..."
-aws cloudformation wait stack-create-complete --stack-name ${STACK_NAME}-backend-codebuild --region $REGION
+# Check if CodeBuild stack exists
+if aws cloudformation describe-stacks --stack-name ${STACK_NAME}-backend-codebuild --region $REGION >/dev/null 2>&1; then
+  echo "📋 CodeBuild stack exists, updating..."
+  aws cloudformation update-stack \
+    --stack-name ${STACK_NAME}-backend-codebuild \
+    --template-body file://"$TEMP_DIR/backend-codebuild.yaml" \
+    --parameters ParameterKey=ProjectName,ParameterValue=$STACK_NAME \
+    --capabilities CAPABILITY_NAMED_IAM \
+    --region $REGION
+  
+  echo "⏳ Waiting for CodeBuild project update..."
+  aws cloudformation wait stack-update-complete --stack-name ${STACK_NAME}-backend-codebuild --region $REGION
+else
+  echo "📋 Creating new CodeBuild stack..."
+  aws cloudformation create-stack \
+    --stack-name ${STACK_NAME}-backend-codebuild \
+    --template-body file://"$TEMP_DIR/backend-codebuild.yaml" \
+    --parameters ParameterKey=ProjectName,ParameterValue=$STACK_NAME \
+    --capabilities CAPABILITY_NAMED_IAM \
+    --region $REGION
+  
+  echo "⏳ Waiting for CodeBuild project creation..."
+  aws cloudformation wait stack-create-complete --stack-name ${STACK_NAME}-backend-codebuild --region $REGION
+fi
 
 # Upload source to S3
 echo "📦 Uploading backend source to S3..."
@@ -159,7 +173,7 @@ CODEBUILD_PROJECT=$(aws cloudformation describe-stacks --stack-name ${STACK_NAME
 
 BUILD_ID=$(aws codebuild start-build \
   --project-name $CODEBUILD_PROJECT \
-  --source-location s3://$S3_BUCKET/backend-source.zip \
+  --source-override '{"type":"S3","location":"'$S3_BUCKET'/backend-source.zip"}' \
   --query 'build.id' --output text)
 
 echo "📋 CodeBuild started: $BUILD_ID"

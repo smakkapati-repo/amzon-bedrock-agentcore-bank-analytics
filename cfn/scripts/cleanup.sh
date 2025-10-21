@@ -177,17 +177,19 @@ echo ""
 # Check if individual stacks exist
 FRONTEND_STACK_EXISTS=$(aws cloudformation describe-stacks --stack-name ${STACK_NAME}-frontend --region $REGION >/dev/null 2>&1 && echo "yes" || echo "no")
 BACKEND_STACK_EXISTS=$(aws cloudformation describe-stacks --stack-name ${STACK_NAME}-backend --region $REGION >/dev/null 2>&1 && echo "yes" || echo "no")
+BACKEND_CODEBUILD_STACK_EXISTS=$(aws cloudformation describe-stacks --stack-name ${STACK_NAME}-backend-codebuild --region $REGION >/dev/null 2>&1 && echo "yes" || echo "no")
 INFRA_STACK_EXISTS=$(aws cloudformation describe-stacks --stack-name ${STACK_NAME}-infra --region $REGION >/dev/null 2>&1 && echo "yes" || echo "no")
 MASTER_STACK_EXISTS=$(aws cloudformation describe-stacks --stack-name $STACK_NAME --region $REGION >/dev/null 2>&1 && echo "yes" || echo "no")
 
 # Delete in correct dependency order:
 # 1. Frontend (depends on infra)
 # 2. Backend (depends on infra + auth)
-# 3. Auth (Cognito)
-# 4. Infra (base infrastructure - MUST BE LAST because others depend on its exports)
-# 5. Master (if exists, orchestrates nested stacks)
+# 3. Backend CodeBuild (depends on infra)
+# 4. Auth (Cognito)
+# 5. Infra (base infrastructure - MUST BE LAST because others depend on its exports)
+# 6. Master (if exists, orchestrates nested stacks)
 
-echo "Deletion order: Frontend → Backend → Auth → Infra → Master"
+echo "Deletion order: Frontend → Backend → Backend-CodeBuild → Auth → Infra → Master"
 echo ""
 
 if [ "$FRONTEND_STACK_EXISTS" = "yes" ]; then
@@ -205,6 +207,15 @@ if [ "$BACKEND_STACK_EXISTS" = "yes" ]; then
   echo -e "${YELLOW}⏳ Waiting for backend stack deletion...${NC}"
   aws cloudformation wait stack-delete-complete --stack-name ${STACK_NAME}-backend --region $REGION 2>/dev/null || echo "⚠️  Backend stack deletion completed with warnings"
   echo -e "${GREEN}✅ Backend stack deleted${NC}"
+  echo ""
+fi
+
+if [ "$BACKEND_CODEBUILD_STACK_EXISTS" = "yes" ]; then
+  echo "Deleting ${STACK_NAME}-backend-codebuild stack..."
+  aws cloudformation delete-stack --stack-name ${STACK_NAME}-backend-codebuild --region $REGION
+  echo -e "${YELLOW}⏳ Waiting for backend-codebuild stack deletion...${NC}"
+  aws cloudformation wait stack-delete-complete --stack-name ${STACK_NAME}-backend-codebuild --region $REGION 2>/dev/null || echo "⚠️  Backend-codebuild stack deletion completed with warnings"
+  echo -e "${GREEN}✅ Backend-codebuild stack deleted${NC}"
   echo ""
 fi
 
@@ -343,7 +354,7 @@ echo -e "${GREEN}✨ Cleanup Complete!${NC}"
 echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 echo ""
 echo "Deleted resources:"
-echo "  ✅ CloudFormation stacks: $STACK_NAME, ${STACK_NAME}-frontend, ${STACK_NAME}-backend, ${STACK_NAME}-infra, ${STACK_NAME}-auth"
+echo "  ✅ CloudFormation stacks: $STACK_NAME, ${STACK_NAME}-frontend, ${STACK_NAME}-backend, ${STACK_NAME}-backend-codebuild, ${STACK_NAME}-infra, ${STACK_NAME}-auth"
 echo "  ✅ S3 buckets (frontend, uploaded-docs) with all versions"
 echo "  ✅ ECR repositories (backend, agent)"
 echo "  ✅ ECS cluster and services"
