@@ -2,7 +2,7 @@
 set -e
 
 STACK_NAME=${1:-bankiq}
-REGION=${2:-us-east-1}
+REGION=${2:-us-west-2}
 
 echo "=========================================="
 echo "Deploy Backend (CodeBuild Version)"
@@ -205,7 +205,8 @@ PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 cd "$PROJECT_ROOT"
 # Get VPC and subnet info from infrastructure stack
 VPC_ID=$(aws cloudformation describe-stacks --stack-name ${STACK_NAME}-infra --region $REGION --query 'Stacks[0].Outputs[?OutputKey==`VpcId`].OutputValue' --output text)
-SUBNET_IDS=$(aws cloudformation describe-stacks --stack-name ${STACK_NAME}-infra --region $REGION --query 'Stacks[0].Outputs[?OutputKey==`PrivateSubnetIds`].OutputValue' --output text)
+PUBLIC_SUBNET_IDS=$(aws cloudformation describe-stacks --stack-name ${STACK_NAME}-infra --region $REGION --query 'Stacks[0].Outputs[?OutputKey==`PublicSubnetIds`].OutputValue' --output text)
+PRIVATE_SUBNET_IDS=$(aws cloudformation describe-stacks --stack-name ${STACK_NAME}-infra --region $REGION --query 'Stacks[0].Outputs[?OutputKey==`PrivateSubnetIds`].OutputValue' --output text)
 
 aws cloudformation create-stack \
   --stack-name ${STACK_NAME}-backend \
@@ -213,9 +214,10 @@ aws cloudformation create-stack \
   --parameters \
     ParameterKey=ProjectName,ParameterValue=$STACK_NAME \
     ParameterKey=Environment,ParameterValue=prod \
+    ParameterKey=PrerequisitesStackName,ParameterValue=${STACK_NAME}-infra \
     ParameterKey=AgentArn,ParameterValue="$AGENT_ARN" \
     ParameterKey=VpcId,ParameterValue="$VPC_ID" \
-    ParameterKey=SubnetIds,ParameterValue="$SUBNET_IDS" \
+    ParameterKey=SubnetIds,ParameterValue="$PUBLIC_SUBNET_IDS" \
   --capabilities CAPABILITY_IAM \
   --region $REGION
 
@@ -223,8 +225,8 @@ echo "⏳ Waiting for backend deployment (7-10 minutes)..."
 aws cloudformation wait stack-create-complete --stack-name ${STACK_NAME}-backend --region $REGION
 
 # Get backend URL and save for frontend
-BACKEND_URL=$(aws cloudformation describe-stacks --stack-name ${STACK_NAME}-backend --region $REGION --query 'Stacks[0].Outputs[?OutputKey==`BackendUrl`].OutputValue' --output text)
 ALB_URL=$(aws cloudformation describe-stacks --stack-name ${STACK_NAME}-backend --region $REGION --query 'Stacks[0].Outputs[?OutputKey==`ALBUrl`].OutputValue' --output text)
+BACKEND_URL="$ALB_URL"
 FRONTEND_BUCKET=$(aws cloudformation describe-stacks --stack-name ${STACK_NAME}-infra --region $REGION --query 'Stacks[0].Outputs[?OutputKey==`FrontendBucketName`].OutputValue' --output text)
 
 # Save for frontend phase
