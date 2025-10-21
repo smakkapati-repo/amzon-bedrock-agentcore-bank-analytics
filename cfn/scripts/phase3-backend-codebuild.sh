@@ -205,8 +205,7 @@ PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 cd "$PROJECT_ROOT"
 # Get VPC and subnet info from infrastructure stack
 VPC_ID=$(aws cloudformation describe-stacks --stack-name ${STACK_NAME}-infra --region $REGION --query 'Stacks[0].Outputs[?OutputKey==`VpcId`].OutputValue' --output text)
-PUBLIC_SUBNET_IDS=$(aws cloudformation describe-stacks --stack-name ${STACK_NAME}-infra --region $REGION --query 'Stacks[0].Outputs[?OutputKey==`PublicSubnetIds`].OutputValue' --output text)
-PRIVATE_SUBNET_IDS=$(aws cloudformation describe-stacks --stack-name ${STACK_NAME}-infra --region $REGION --query 'Stacks[0].Outputs[?OutputKey==`PrivateSubnetIds`].OutputValue' --output text)
+SUBNET_IDS=$(aws cloudformation describe-stacks --stack-name ${STACK_NAME}-infra --region $REGION --query 'Stacks[0].Outputs[?OutputKey==`SubnetIds`].OutputValue' --output text)
 
 aws cloudformation create-stack \
   --stack-name ${STACK_NAME}-backend \
@@ -217,7 +216,7 @@ aws cloudformation create-stack \
     ParameterKey=PrerequisitesStackName,ParameterValue=${STACK_NAME}-infra \
     ParameterKey=AgentArn,ParameterValue="$AGENT_ARN" \
     ParameterKey=VpcId,ParameterValue="$VPC_ID" \
-    ParameterKey=SubnetIds,ParameterValue="$PUBLIC_SUBNET_IDS" \
+    ParameterKey=SubnetIds,ParameterValue="$SUBNET_IDS" \
   --capabilities CAPABILITY_IAM \
   --region $REGION
 

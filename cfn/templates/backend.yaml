@@ -200,7 +200,7 @@ Resources:
               Value: !Ref AWS::Region
             - Name: COGNITO_USER_POOL_ID
               Value:
-                Fn::ImportValue: !Sub '${PrerequisitesStackName}-UserPoolId'
+                Fn::ImportValue: !Sub '${ProjectName}-auth-UserPoolId'
           LogConfiguration:
             LogDriver: awslogs
             Options:
