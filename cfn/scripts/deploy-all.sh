@@ -72,7 +72,7 @@ echo -e "${GREEN}✅ Phase 2 Complete!${NC}\n"
 echo -e "${BLUE}┌─────────────────────────────────────────────────────────────┐${NC}"
 echo -e "${BLUE}│${NC} ${GREEN}[3/5]${NC} ${CYAN}Building & Deploying Backend Container...${NC}           ${BLUE}│${NC}"
 echo -e "${BLUE}└─────────────────────────────────────────────────────────────┘${NC}"
-${SCRIPT_DIR}/phase3-backend.sh $STACK_NAME $REGION
+${SCRIPT_DIR}/phase3-backend-codebuild.sh $STACK_NAME $REGION
 if [ $? -ne 0 ]; then
     echo -e "${RED}❌ Phase 3 failed${NC}"
     exit 1

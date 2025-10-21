@@ -38,6 +38,8 @@ User (HTTPS) → CloudFront → ALB (HTTP) → ECS Fargate → AgentCore
 
 ### 2. Install Required Tools
 
+**Windows Users:** Use [WINDOWS_SETUP.md](WINDOWS_SETUP.md) for one-command installation
+
 **AgentCore CLI:**
 ```bash
 pip install bedrock-agentcore-starter-toolkit
@@ -52,6 +54,9 @@ brew install docker
 # Linux
 sudo apt-get install docker.io
 
+# Windows (PowerShell as Admin)
+choco install docker-desktop -y
+
 # Verify
 docker --version
 ```
@@ -64,6 +69,9 @@ brew install node@18
 # Linux
 curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
 sudo apt-get install -y nodejs
+
+# Windows (PowerShell as Admin)
+choco install nodejs -y
 
 # Verify
 node --version  # Should be 18.x or higher

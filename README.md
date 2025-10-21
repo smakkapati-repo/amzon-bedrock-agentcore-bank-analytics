@@ -197,6 +197,8 @@ See `backend/README_AGENT.md` for details.
 - Node.js 18+
 - Python 3.11+
 
+**Windows Users:** See [WINDOWS_SETUP.md](WINDOWS_SETUP.md) for one-command installation
+
 ## 🚀 Deployment Guide
 
 ### Prerequisites
