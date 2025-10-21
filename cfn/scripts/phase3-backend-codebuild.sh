@@ -203,6 +203,10 @@ echo "🚀 Deploying backend stack..."
 # Go to project root directory for Windows compatibility
 PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 cd "$PROJECT_ROOT"
+# Get VPC and subnet info from infrastructure stack
+VPC_ID=$(aws cloudformation describe-stacks --stack-name ${STACK_NAME}-infra --region $REGION --query 'Stacks[0].Outputs[?OutputKey==`VpcId`].OutputValue' --output text)
+SUBNET_IDS=$(aws cloudformation describe-stacks --stack-name ${STACK_NAME}-infra --region $REGION --query 'Stacks[0].Outputs[?OutputKey==`PrivateSubnetIds`].OutputValue' --output text)
+
 aws cloudformation create-stack \
   --stack-name ${STACK_NAME}-backend \
   --template-body file://cfn/templates/backend.yaml \
@@ -210,6 +214,8 @@ aws cloudformation create-stack \
     ParameterKey=ProjectName,ParameterValue=$STACK_NAME \
     ParameterKey=Environment,ParameterValue=prod \
     ParameterKey=AgentArn,ParameterValue="$AGENT_ARN" \
+    ParameterKey=VpcId,ParameterValue="$VPC_ID" \
+    ParameterKey=SubnetIds,ParameterValue="$SUBNET_IDS" \
   --capabilities CAPABILITY_IAM \
   --region $REGION
 
