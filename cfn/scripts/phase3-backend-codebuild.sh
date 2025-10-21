@@ -176,7 +176,8 @@ CODEBUILD_PROJECT=$(aws cloudformation describe-stacks --stack-name ${STACK_NAME
 
 BUILD_ID=$(aws codebuild start-build \
   --project-name $CODEBUILD_PROJECT \
-  --source-override '{"type":"S3","location":"'$S3_BUCKET'/backend-source.zip"}' \
+  --source-type-override S3 \
+  --source-location-override s3://$S3_BUCKET/backend-source.zip \
   --query 'build.id' --output text)
 
 echo "📋 CodeBuild started: $BUILD_ID"
