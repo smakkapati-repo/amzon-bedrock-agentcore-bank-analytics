@@ -200,11 +200,11 @@ echo "✅ Backend image built and pushed via CodeBuild"
 
 # Deploy backend stack (same as original)
 echo "🚀 Deploying backend stack..."
-# Get absolute path to template for cross-platform compatibility
-TEMPLATE_PATH="$(cd "${SCRIPT_DIR}/../templates" && pwd)/backend.yaml"
+# Use current working directory for Windows Git Bash compatibility
+cd "${SCRIPT_DIR}/.."
 aws cloudformation create-stack \
   --stack-name ${STACK_NAME}-backend \
-  --template-body file://"$TEMPLATE_PATH" \
+  --template-body file://templates/backend.yaml \
   --parameters \
     ParameterKey=ProjectName,ParameterValue=$STACK_NAME \
     ParameterKey=Environment,ParameterValue=prod \
