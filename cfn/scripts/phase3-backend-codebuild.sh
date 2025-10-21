@@ -46,7 +46,7 @@ Resources:
   CodeBuildServiceRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub "\${ProjectName}-backend-codebuild-role-\${AWS::AccountId}"
+      RoleName: !Sub "\${ProjectName}-backend-cb-role-\${AWS::AccountId}"
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -85,7 +85,7 @@ Resources:
   BackendCodeBuildProject:
     Type: AWS::CodeBuild::Project
     Properties:
-      Name: !Sub "\${ProjectName}-backend-builder-\${AWS::AccountId}"
+      Name: !Sub "\${ProjectName}-backend-cb-\${AWS::AccountId}"
       ServiceRole: !GetAtt CodeBuildServiceRole.Arn
       Artifacts:
         Type: NO_ARTIFACTS
