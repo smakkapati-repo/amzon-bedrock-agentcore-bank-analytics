@@ -37,10 +37,11 @@ else
   
   # Get the script directory to reference templates correctly
   SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+  cd "${SCRIPT_DIR}/../templates"
   
   aws cloudformation create-stack \
     --stack-name ${STACK_NAME}-auth \
-    --template-body "file://${SCRIPT_DIR}/../templates/auth.yaml" \
+    --template-body file://auth.yaml \
     --parameters \
       ParameterKey=ProjectName,ParameterValue=$STACK_NAME \
       ParameterKey=CallbackURL,ParameterValue=http://localhost:3000 \
