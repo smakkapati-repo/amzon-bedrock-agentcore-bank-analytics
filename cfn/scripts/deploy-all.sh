@@ -17,7 +17,7 @@ CYAN='\033[0;36m'
 NC='\033[0m'
 
 STACK_NAME=${1:-bankiq}
-REGION=${2:-us-east-1}
+REGION=${2:-us-west-2}
 
 echo -e "${PURPLE}"
 echo "═══════════════════════════════════════════════════════════════"

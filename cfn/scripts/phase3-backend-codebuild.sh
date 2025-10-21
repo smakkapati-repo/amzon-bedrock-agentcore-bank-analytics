@@ -206,6 +206,8 @@ cd "$PROJECT_ROOT"
 # Get VPC and subnet info from infrastructure stack
 VPC_ID=$(aws cloudformation describe-stacks --stack-name ${STACK_NAME}-infra --region $REGION --query 'Stacks[0].Outputs[?OutputKey==`VpcId`].OutputValue' --output text)
 SUBNET_IDS=$(aws cloudformation describe-stacks --stack-name ${STACK_NAME}-infra --region $REGION --query 'Stacks[0].Outputs[?OutputKey==`SubnetIds`].OutputValue' --output text)
+# Convert comma-separated string to proper format if needed
+SUBNET_IDS=$(echo "$SUBNET_IDS" | tr -d '[]"' | tr ' ' ',')
 
 aws cloudformation create-stack \
   --stack-name ${STACK_NAME}-backend \
