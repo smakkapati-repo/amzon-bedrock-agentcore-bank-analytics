@@ -200,11 +200,12 @@ echo "✅ Backend image built and pushed via CodeBuild"
 
 # Deploy backend stack (same as original)
 echo "🚀 Deploying backend stack..."
-# Use current working directory for Windows Git Bash compatibility
-cd "${SCRIPT_DIR}/.."
+# Go to project root directory for Windows compatibility
+PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
+cd "$PROJECT_ROOT"
 aws cloudformation create-stack \
   --stack-name ${STACK_NAME}-backend \
-  --template-body file://templates/backend.yaml \
+  --template-body file://cfn/templates/backend.yaml \
   --parameters \
     ParameterKey=ProjectName,ParameterValue=$STACK_NAME \
     ParameterKey=Environment,ParameterValue=prod \
