@@ -35,10 +35,9 @@ if [ "$AUTH_STACK_EXISTS" = "yes" ]; then
 else
   echo "⚠️  Auth stack not found - deploying..."
   
-  # Get the script directory to reference templates correctly
-  SCRIPT_DIR_TEMP="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+  SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
   
-  (cd "${SCRIPT_DIR_TEMP}/../templates" && \
+  (cd "${SCRIPT_DIR}/../templates" && \
   aws cloudformation create-stack \
     --stack-name ${STACK_NAME}-auth \
     --template-body file://auth.yaml \
@@ -51,11 +50,11 @@ else
   echo "⏳ Waiting for auth stack creation..."
   aws cloudformation wait stack-create-complete --stack-name ${STACK_NAME}-auth --region $REGION
   echo "✅ Auth stack created"
+  
+  # Reset SCRIPT_DIR after subshell
+  SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 fi
 echo ""
-
-# Get the script directory to reference other scripts correctly
-SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
 # Phase 1: Infrastructure (MUST BE FIRST - creates ECR repos)
 echo -e "${BLUE}┌─────────────────────────────────────────────────────────────┐${NC}"

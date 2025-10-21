@@ -9,28 +9,34 @@ echo "=========================================="
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 cd "${SCRIPT_DIR}/../../backend"
 
+# Set UTF-8 encoding
+export PYTHONIOENCODING=utf-8
+export LC_ALL=C.UTF-8
+
 # Check if agentcore is installed
 if ! command -v agentcore &> /dev/null; then
-    echo "❌ agentcore CLI not found. Install: pip install bedrock-agentcore-starter-toolkit"
+    echo "ERROR: agentcore CLI not found. Install: pip install bedrock-agentcore-starter-toolkit"
     exit 1
 fi
 
-# Check if config exists, if not create it
-if [ ! -f ".bedrock_agentcore.yaml" ]; then
-    echo "⚙️  Config file not found, creating..."
-    agentcore configure --entrypoint bank_iq_agent_v1.py
-    echo "✅ Config file created"
+# Clean up stale config
+if [ -f ".bedrock_agentcore.yaml" ]; then
+    echo "Removing stale config..."
+    rm .bedrock_agentcore.yaml
 fi
 
-# Deploy agent
-echo "🚀 Deploying agent..."
-agentcore launch -a bank_iq_agent_v1 | tee /tmp/agent_deploy.log
+echo "Creating fresh config..."
+agentcore configure --entrypoint bank_iq_agent_v1.py
+
+# Deploy agent with local-build (cross-platform compatible)
+echo "Deploying agent with local-build mode..."
+PYTHONIOENCODING=utf-8 agentcore launch -a bank_iq_agent_v1 --local-build 2>&1 | tee /tmp/agent_deploy.log
 
 # Extract agent ARN
 AGENT_ARN=$(grep -oE 'arn:aws:bedrock-agentcore:[^[:space:]]+:runtime/bank_iq_agent_v1-[a-zA-Z0-9]+' /tmp/agent_deploy.log | head -1)
 
 if [ -z "$AGENT_ARN" ]; then
-    echo "❌ Failed to extract agent ARN"
+    echo "ERROR: Failed to extract agent ARN"
     exit 1
 fi
 
@@ -38,7 +44,7 @@ fi
 echo "$AGENT_ARN" > /tmp/agent_arn.txt
 
 # Add S3 permissions to AgentCore role
-echo "🔐 Adding S3 permissions to AgentCore role..."
+echo "Adding S3 permissions to AgentCore role..."
 ROLE_NAME="AmazonBedrockAgentCoreSDKRuntime-us-east-1-491c2288f3"
 BUCKET_NAME="bankiq-uploaded-docs-prod"
 
@@ -60,10 +66,10 @@ aws iam put-role-policy \
         ]
       }
     ]
-  }" 2>/dev/null || echo "⚠️  S3 permissions already exist or failed to add"
+  }" 2>/dev/null || echo "WARNING: S3 permissions already exist or failed to add"
 
 echo ""
-echo "✅ PHASE 1 COMPLETE"
+echo "PHASE 1 COMPLETE"
 echo "Agent ARN: $AGENT_ARN"
 echo "Saved to: /tmp/agent_arn.txt"
 echo ""
