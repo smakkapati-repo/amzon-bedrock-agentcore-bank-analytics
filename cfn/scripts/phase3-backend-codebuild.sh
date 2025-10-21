@@ -159,6 +159,9 @@ fi
 echo "📦 Uploading backend source to S3..."
 cd "${SCRIPT_DIR}/../../backend"
 
+# Ensure temp directory exists
+mkdir -p "$TEMP_DIR"
+
 # Create source zip
 zip -r "$TEMP_DIR/backend-source.zip" . -x "*.git*" "node_modules/*" ".bedrock_agentcore.yaml"
 
