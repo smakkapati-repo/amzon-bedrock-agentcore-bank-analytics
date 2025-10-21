@@ -120,6 +120,12 @@ if [ -n "$AGENT_ECR" ]; then
   echo "✅ Agent ECR repository deleted"
 fi
 
+# Delete AgentCore ECR repository explicitly
+echo -e "${YELLOW}🗑️  Deleting AgentCore ECR repository...${NC}"
+AGENTCORE_ECR="bedrock-agentcore-bank_iq_agent_v1"
+aws ecr delete-repository --repository-name $AGENTCORE_ECR --region us-west-2 --force 2>/dev/null || echo "⚠️  AgentCore ECR repository may not exist"
+echo "✅ AgentCore ECR repository deletion attempted"
+
 # Fallback: Find and delete any remaining ECR repositories with stack name or variations
 echo -e "${YELLOW}🔍 Checking for any remaining ${STACK_NAME} ECR repositories...${NC}"
 # Search for repositories containing stack name (handles both "bankiq" and "bank-iq" variations)
@@ -129,7 +135,7 @@ if [ -n "$REMAINING_REPOS" ]; then
   for REPO in $REMAINING_REPOS; do
     # Check if repo name contains stack name (with or without hyphens)
     REPO_NORMALIZED=$(echo "$REPO" | sed 's/-//g')
-    if [[ "$REPO_NORMALIZED" == *"$STACK_NAME_PATTERN"* ]]; then
+    if [[ "$REPO_NORMALIZED" == *"$STACK_NAME_PATTERN"* ]] || [[ "$REPO" == *"bedrock-agentcore"* ]]; then
       echo "Found repository: $REPO - deleting..."
       aws ecr delete-repository --repository-name $REPO --region $REGION --force 2>/dev/null || true
     fi
@@ -257,8 +263,17 @@ echo -e "${GREEN}✅ All stacks deleted successfully!${NC}"
 echo ""
 echo -e "${YELLOW}🗑️  Deleting AgentCore agent...${NC}"
 if command -v agentcore &> /dev/null; then
-  cd "$(dirname "$0")/../../backend" && agentcore destroy -a bank_iq_agent_v1 --force 2>/dev/null || echo "⚠️  Agent may not exist or already deleted"
-  echo "✅ AgentCore agent deleted"
+  # Try to delete agent from backend directory
+  BACKEND_DIR="$(dirname "$0")/../../backend"
+  if [ -d "$BACKEND_DIR" ]; then
+    echo "Attempting to delete agent from: $BACKEND_DIR"
+    cd "$BACKEND_DIR"
+    agentcore destroy -a bank_iq_agent_v1 --force || echo "⚠️  Agent deletion failed or agent doesn't exist"
+  else
+    echo "⚠️  Backend directory not found, trying from current directory"
+    agentcore destroy -a bank_iq_agent_v1 --force || echo "⚠️  Agent deletion failed or agent doesn't exist"
+  fi
+  echo "✅ AgentCore agent deletion attempted"
 else
   echo "⚠️  agentcore CLI not found, skipping agent deletion"
 fi
