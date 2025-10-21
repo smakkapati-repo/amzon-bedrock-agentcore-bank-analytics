@@ -1,6 +1,12 @@
 #!/bin/bash
 set -e
 
+# Get script directory at the very beginning (Windows Git Bash compatible)
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+if [ -z "$SCRIPT_DIR" ]; then
+  SCRIPT_DIR="$(dirname "$(readlink -f "$0")")"
+fi
+
 # Colors
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -35,8 +41,6 @@ if [ "$AUTH_STACK_EXISTS" = "yes" ]; then
 else
   echo "⚠️  Auth stack not found - deploying..."
   
-  SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-  
   (cd "${SCRIPT_DIR}/../templates" && \
   aws cloudformation create-stack \
     --stack-name ${STACK_NAME}-auth \
@@ -50,9 +54,6 @@ else
   echo "⏳ Waiting for auth stack creation..."
   aws cloudformation wait stack-create-complete --stack-name ${STACK_NAME}-auth --region $REGION
   echo "✅ Auth stack created"
-  
-  # Reset SCRIPT_DIR after subshell
-  SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 fi
 echo ""
 
