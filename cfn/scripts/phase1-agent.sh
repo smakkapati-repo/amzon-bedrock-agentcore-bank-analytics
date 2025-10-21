@@ -19,18 +19,16 @@ if ! command -v agentcore &> /dev/null; then
     exit 1
 fi
 
-# Clean up stale config
-if [ -f ".bedrock_agentcore.yaml" ]; then
-    echo "Removing stale config..."
-    rm .bedrock_agentcore.yaml
+# Check if config exists, if not create it
+if [ ! -f ".bedrock_agentcore.yaml" ]; then
+    echo "Config file not found, creating..."
+    agentcore configure --entrypoint bank_iq_agent_v1.py
+    echo "Config file created"
 fi
 
-echo "Creating fresh config..."
-agentcore configure --entrypoint bank_iq_agent_v1.py
-
-# Deploy agent with local-build (cross-platform compatible)
-echo "Deploying agent with local-build mode..."
-PYTHONIOENCODING=utf-8 agentcore launch -a bank_iq_agent_v1 --local-build 2>&1 | tee /tmp/agent_deploy.log
+# Deploy agent
+echo "Deploying agent..."
+PYTHONIOENCODING=utf-8 agentcore launch -a bank_iq_agent_v1 2>&1 | tee /tmp/agent_deploy.log
 
 # Extract agent ARN
 AGENT_ARN=$(grep -oE 'arn:aws:bedrock-agentcore:[^[:space:]]+:runtime/bank_iq_agent_v1-[a-zA-Z0-9]+' /tmp/agent_deploy.log | head -1)
