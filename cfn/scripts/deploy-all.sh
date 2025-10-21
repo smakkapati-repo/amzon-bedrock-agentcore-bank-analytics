@@ -36,9 +36,9 @@ else
   echo "⚠️  Auth stack not found - deploying..."
   
   # Get the script directory to reference templates correctly
-  SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-  cd "${SCRIPT_DIR}/../templates"
+  SCRIPT_DIR_TEMP="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
   
+  (cd "${SCRIPT_DIR_TEMP}/../templates" && \
   aws cloudformation create-stack \
     --stack-name ${STACK_NAME}-auth \
     --template-body file://auth.yaml \
@@ -46,7 +46,7 @@ else
       ParameterKey=ProjectName,ParameterValue=$STACK_NAME \
       ParameterKey=CallbackURL,ParameterValue=http://localhost:3000 \
       ParameterKey=Environment,ParameterValue=prod \
-    --region $REGION
+    --region $REGION)
   
   echo "⏳ Waiting for auth stack creation..."
   aws cloudformation wait stack-create-complete --stack-name ${STACK_NAME}-auth --region $REGION
