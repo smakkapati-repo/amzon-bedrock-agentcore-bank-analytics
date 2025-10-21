@@ -222,12 +222,19 @@ aws cloudformation create-stack \
 echo "⏳ Waiting for backend deployment (7-10 minutes)..."
 aws cloudformation wait stack-create-complete --stack-name ${STACK_NAME}-backend --region $REGION
 
-# Get backend URL
+# Get backend URL and save for frontend
 BACKEND_URL=$(aws cloudformation describe-stacks --stack-name ${STACK_NAME}-backend --region $REGION --query 'Stacks[0].Outputs[?OutputKey==`BackendUrl`].OutputValue' --output text)
+ALB_URL=$(aws cloudformation describe-stacks --stack-name ${STACK_NAME}-backend --region $REGION --query 'Stacks[0].Outputs[?OutputKey==`ALBUrl`].OutputValue' --output text)
+FRONTEND_BUCKET=$(aws cloudformation describe-stacks --stack-name ${STACK_NAME}-infra --region $REGION --query 'Stacks[0].Outputs[?OutputKey==`FrontendBucketName`].OutputValue' --output text)
+
+# Save for frontend phase
+echo "$ALB_URL" > /tmp/alb_url.txt
+echo "$FRONTEND_BUCKET" > /tmp/frontend_bucket.txt
 
 echo ""
 echo "✅ PHASE 3 COMPLETE (CodeBuild Version)"
 echo "Backend URL: $BACKEND_URL"
+echo "ALB URL: $ALB_URL"
 echo ""
 echo "Next: Run phase4-frontend.sh"
 
