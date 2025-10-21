@@ -166,7 +166,7 @@ mkdir -p "$TEMP_DIR"
 zip -r "$TEMP_DIR/backend-source.zip" . -x "*.git*" "node_modules/*" ".bedrock_agentcore.yaml"
 
 # Upload to S3 (use existing bucket from infrastructure)
-S3_BUCKET=$(aws cloudformation describe-stacks --stack-name ${STACK_NAME}-infra --region $REGION --query 'Stacks[0].Outputs[?OutputKey==`FrontendBucket`].OutputValue' --output text)
+S3_BUCKET=$(aws cloudformation describe-stacks --stack-name ${STACK_NAME}-infra --region $REGION --query 'Stacks[0].Outputs[?OutputKey==`FrontendBucketName`].OutputValue' --output text)
 aws s3 cp "$TEMP_DIR/backend-source.zip" s3://$S3_BUCKET/backend-source.zip
 
 # Start CodeBuild
