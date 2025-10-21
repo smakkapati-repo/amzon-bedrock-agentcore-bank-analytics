@@ -18,7 +18,7 @@ else
 fi
 
 # Get infrastructure outputs
-BACKEND_ECR=$(aws cloudformation describe-stacks --stack-name ${STACK_NAME}-infra --region $REGION --query 'Stacks[0].Outputs[?OutputKey==`BackendECR`].OutputValue' --output text)
+BACKEND_ECR=$(aws cloudformation describe-stacks --stack-name ${STACK_NAME}-infra --region $REGION --query 'Stacks[0].Outputs[?OutputKey==`BackendECRRepositoryUri`].OutputValue' --output text)
 echo "Backend ECR: $BACKEND_ECR"
 
 # Create CodeBuild project for backend
@@ -206,8 +206,8 @@ cd "$PROJECT_ROOT"
 # Get VPC and subnet info from infrastructure stack
 VPC_ID=$(aws cloudformation describe-stacks --stack-name ${STACK_NAME}-infra --region $REGION --query 'Stacks[0].Outputs[?OutputKey==`VpcId`].OutputValue' --output text)
 SUBNET_IDS=$(aws cloudformation describe-stacks --stack-name ${STACK_NAME}-infra --region $REGION --query 'Stacks[0].Outputs[?OutputKey==`SubnetIds`].OutputValue' --output text)
-# Convert comma-separated string to proper format if needed
-SUBNET_IDS=$(echo "$SUBNET_IDS" | tr -d '[]"' | tr ' ' ',')
+# AWS CLI text output is already comma-separated, just trim whitespace
+SUBNET_IDS=$(echo "$SUBNET_IDS" | xargs)
 
 aws cloudformation create-stack \
   --stack-name ${STACK_NAME}-backend \
@@ -219,6 +219,7 @@ aws cloudformation create-stack \
     ParameterKey=AgentArn,ParameterValue="$AGENT_ARN" \
     ParameterKey=VpcId,ParameterValue="$VPC_ID" \
     ParameterKey=SubnetIds,ParameterValue="$SUBNET_IDS" \
+    ParameterKey=BackendImageTag,ParameterValue=latest \
   --capabilities CAPABILITY_IAM \
   --region $REGION
 
