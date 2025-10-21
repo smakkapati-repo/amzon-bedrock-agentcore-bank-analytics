@@ -28,10 +28,11 @@ echo "🚀 Creating CodeBuild project for backend..."
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
 # Create CodeBuild project via CloudFormation
-# Use portable temp directory
-TEMP_DIR="$(pwd)/temp"
+# Use portable temp directory (Windows Git Bash compatible)
+TEMP_DIR="temp"
 mkdir -p "$TEMP_DIR"
 
+# Use relative path for Windows compatibility
 cat > "$TEMP_DIR/backend-codebuild.yaml" << EOF
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'CodeBuild project for BankIQ+ Backend'
