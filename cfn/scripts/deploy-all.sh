@@ -40,7 +40,7 @@ else
   
   aws cloudformation create-stack \
     --stack-name ${STACK_NAME}-auth \
-    --template-body file://${SCRIPT_DIR}/../templates/auth.yaml \
+    --template-body "file://${SCRIPT_DIR}/../templates/auth.yaml" \
     --parameters \
       ParameterKey=ProjectName,ParameterValue=$STACK_NAME \
       ParameterKey=CallbackURL,ParameterValue=http://localhost:3000 \
