@@ -29,33 +29,16 @@ echo -e "${CYAN}  Estimated Time: ${YELLOW}20-25 minutes${NC}"
 echo -e "${PURPLE}═══════════════════════════════════════════════════════════════${NC}"
 echo ""
 
-# Phase 0: Check if Auth stack exists
+# Phase 0: Auth
 echo -e "${BLUE}┌─────────────────────────────────────────────────────────────┐${NC}"
-echo -e "${BLUE}│${NC} ${GREEN}[0/5]${NC} ${CYAN}Checking Cognito Auth Stack...${NC}                     ${BLUE}│${NC}"
+echo -e "${BLUE}│${NC} ${GREEN}[0/5]${NC} ${CYAN}Deploying Cognito Authentication...${NC}                ${BLUE}│${NC}"
 echo -e "${BLUE}└─────────────────────────────────────────────────────────────┘${NC}"
-
-AUTH_STACK_EXISTS=$(aws cloudformation describe-stacks --stack-name ${STACK_NAME}-auth --region $REGION >/dev/null 2>&1 && echo "yes" || echo "no")
-
-if [ "$AUTH_STACK_EXISTS" = "yes" ]; then
-  echo "✅ Auth stack already exists"
-else
-  echo "⚠️  Auth stack not found - deploying..."
-  
-  (cd "${SCRIPT_DIR}/../templates" && \
-  aws cloudformation create-stack \
-    --stack-name ${STACK_NAME}-auth \
-    --template-body file://auth.yaml \
-    --parameters \
-      ParameterKey=ProjectName,ParameterValue=$STACK_NAME \
-      ParameterKey=CallbackURL,ParameterValue=http://localhost:3000 \
-      ParameterKey=Environment,ParameterValue=prod \
-    --region $REGION)
-  
-  echo "⏳ Waiting for auth stack creation..."
-  aws cloudformation wait stack-create-complete --stack-name ${STACK_NAME}-auth --region $REGION
-  echo "✅ Auth stack created"
+${SCRIPT_DIR}/phase0-auth.sh $STACK_NAME $REGION
+if [ $? -ne 0 ]; then
+    echo -e "${RED}❌ Phase 0 failed${NC}"
+    exit 1
 fi
-echo ""
+echo -e "${GREEN}✅ Phase 0 Complete!${NC}\n"
 
 # Phase 1: Infrastructure (MUST BE FIRST - creates ECR repos)
 echo -e "${BLUE}┌─────────────────────────────────────────────────────────────┐${NC}"
@@ -66,7 +49,7 @@ INFRA_EXISTS=$(aws cloudformation describe-stacks --stack-name ${STACK_NAME}-inf
 if [ "$INFRA_EXISTS" = "yes" ]; then
   echo "✅ Infrastructure stack already exists - skipping"
 else
-  ${SCRIPT_DIR}/phase2-infrastructure.sh $STACK_NAME $REGION
+  ${SCRIPT_DIR}/phase1-infrastructure.sh $STACK_NAME $REGION
   if [ $? -ne 0 ]; then
       echo -e "${RED}❌ Phase 1 failed${NC}"
       exit 1
@@ -78,7 +61,7 @@ echo -e "${GREEN}✅ Phase 1 Complete!${NC}\n"
 echo -e "${BLUE}┌─────────────────────────────────────────────────────────────┐${NC}"
 echo -e "${BLUE}│${NC} ${GREEN}[2/5]${NC} ${CYAN}Deploying AgentCore Agent...${NC}                        ${BLUE}│${NC}"
 echo -e "${BLUE}└─────────────────────────────────────────────────────────────┘${NC}"
-${SCRIPT_DIR}/phase1-agent.sh
+${SCRIPT_DIR}/phase2-agent.sh
 if [ $? -ne 0 ]; then
     echo -e "${RED}❌ Phase 2 failed${NC}"
     exit 1

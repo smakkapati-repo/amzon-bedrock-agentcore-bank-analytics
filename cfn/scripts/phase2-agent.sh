@@ -26,15 +26,35 @@ if [ ! -f ".bedrock_agentcore.yaml" ]; then
     echo "Config file created"
 fi
 
-# Deploy agent
-echo "Deploying agent..."
-PYTHONIOENCODING=utf-8 agentcore launch -a bank_iq_agent_v1 2>&1 | tee /tmp/agent_deploy.log
+# Check if agent already exists
+echo "Checking agent status..."
+AGENT_ARN=""
 
-# Extract agent ARN
-AGENT_ARN=$(grep -oE 'arn:aws:bedrock-agentcore:[^[:space:]]+:runtime/bank_iq_agent_v1-[a-zA-Z0-9]+' /tmp/agent_deploy.log | head -1)
+# Try to get ARN from agentcore status first
+if agentcore status 2>/dev/null | grep -q "Agent ARN:"; then
+    AGENT_ARN=$(agentcore status 2>/dev/null | grep "Agent ARN:" -A 1 | tail -1 | sed 's/^[[:space:]]*//' | sed 's/[[:space:]]*$//')
+    echo "✅ Found existing agent: $AGENT_ARN"
+else
+    # Deploy new agent
+    echo "Deploying new agent..."
+    PYTHONIOENCODING=utf-8 agentcore launch -a bank_iq_agent_v1 2>&1 | tee /tmp/agent_deploy.log
+    
+    # Extract agent ARN from deployment log
+    AGENT_ARN=$(grep -oE 'arn:aws:bedrock-agentcore:[^[:space:]]+:runtime/bank_iq_agent_v1-[a-zA-Z0-9]+' /tmp/agent_deploy.log | head -1)
+    
+    if [ -z "$AGENT_ARN" ]; then
+        # Try to get from status after deployment
+        sleep 5
+        if agentcore status 2>/dev/null | grep -q "Agent ARN:"; then
+            AGENT_ARN=$(agentcore status 2>/dev/null | grep "Agent ARN:" -A 1 | tail -1 | sed 's/^[[:space:]]*//' | sed 's/[[:space:]]*$//')
+            echo "✅ Extracted ARN from status: $AGENT_ARN"
+        fi
+    fi
+fi
 
 if [ -z "$AGENT_ARN" ]; then
     echo "ERROR: Failed to extract agent ARN"
+    echo "Try running: agentcore status"
     exit 1
 fi
 

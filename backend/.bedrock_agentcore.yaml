@@ -19,8 +19,8 @@ agents:
       observability:
         enabled: true
     bedrock_agentcore:
-      agent_id: bank_iq_agent_v1-Io4Wq5BU9X
-      agent_arn: arn:aws:bedrock-agentcore:us-east-1:164543933824:runtime/bank_iq_agent_v1-Io4Wq5BU9X
+      agent_id: bank_iq_agent_v1-WuamybFHVm
+      agent_arn: arn:aws:bedrock-agentcore:us-east-1:164543933824:runtime/bank_iq_agent_v1-WuamybFHVm
       agent_session_id: null
     codebuild:
       project_name: bedrock-agentcore-bank_iq_agent_v1-builder
@@ -28,8 +28,8 @@ agents:
       source_bucket: bedrock-agentcore-codebuild-sources-164543933824-us-east-1
     memory:
       mode: STM_ONLY
-      memory_id: bank_iq_agent_v1_mem-j189dE2pOf
-      memory_arn: arn:aws:bedrock-agentcore:us-east-1:164543933824:memory/bank_iq_agent_v1_mem-j189dE2pOf
+      memory_id: bank_iq_agent_v1_mem-SH1F0U5fMl
+      memory_arn: arn:aws:bedrock-agentcore:us-east-1:164543933824:memory/bank_iq_agent_v1_mem-SH1F0U5fMl
       memory_name: bank_iq_agent_v1_mem
       event_expiry_days: 30
       first_invoke_memory_check_done: false
