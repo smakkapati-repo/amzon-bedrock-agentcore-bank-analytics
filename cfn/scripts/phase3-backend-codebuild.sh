@@ -46,7 +46,7 @@ Resources:
   CodeBuildServiceRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub "\${ProjectName}-backend-codebuild-role"
+      RoleName: !Sub "\${ProjectName}-backend-codebuild-role-\${AWS::AccountId}"
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -85,7 +85,7 @@ Resources:
   BackendCodeBuildProject:
     Type: AWS::CodeBuild::Project
     Properties:
-      Name: !Sub "\${ProjectName}-backend-builder"
+      Name: !Sub "\${ProjectName}-backend-builder-\${AWS::AccountId}"
       ServiceRole: !GetAtt CodeBuildServiceRole.Arn
       Artifacts:
         Type: NO_ARTIFACTS
@@ -154,8 +154,11 @@ aws s3 cp "$TEMP_DIR/backend-source.zip" s3://$S3_BUCKET/backend-source.zip
 
 # Start CodeBuild
 echo "🚀 Starting CodeBuild..."
+# Get the actual CodeBuild project name from the stack
+CODEBUILD_PROJECT=$(aws cloudformation describe-stacks --stack-name ${STACK_NAME}-backend-codebuild --region $REGION --query 'Stacks[0].Outputs[?OutputKey==`CodeBuildProject`].OutputValue' --output text)
+
 BUILD_ID=$(aws codebuild start-build \
-  --project-name ${STACK_NAME}-backend-builder \
+  --project-name $CODEBUILD_PROJECT \
   --source-location s3://$S3_BUCKET/backend-source.zip \
   --query 'build.id' --output text)
 
