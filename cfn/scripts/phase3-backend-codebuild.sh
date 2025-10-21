@@ -28,7 +28,11 @@ echo "🚀 Creating CodeBuild project for backend..."
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
 # Create CodeBuild project via CloudFormation
-cat > /tmp/backend-codebuild.yaml << EOF
+# Use portable temp directory
+TEMP_DIR="$(pwd)/temp"
+mkdir -p "$TEMP_DIR"
+
+cat > "$TEMP_DIR/backend-codebuild.yaml" << EOF
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'CodeBuild project for BankIQ+ Backend'
 
@@ -128,7 +132,7 @@ EOF
 # Deploy CodeBuild stack
 aws cloudformation create-stack \
   --stack-name ${STACK_NAME}-backend-codebuild \
-  --template-body file:///tmp/backend-codebuild.yaml \
+  --template-body file://"$TEMP_DIR/backend-codebuild.yaml" \
   --parameters ParameterKey=ProjectName,ParameterValue=$STACK_NAME \
   --capabilities CAPABILITY_NAMED_IAM \
   --region $REGION
@@ -141,11 +145,11 @@ echo "📦 Uploading backend source to S3..."
 cd "${SCRIPT_DIR}/../../backend"
 
 # Create source zip
-zip -r /tmp/backend-source.zip . -x "*.git*" "node_modules/*" ".bedrock_agentcore.yaml"
+zip -r "$TEMP_DIR/backend-source.zip" . -x "*.git*" "node_modules/*" ".bedrock_agentcore.yaml"
 
 # Upload to S3 (use existing bucket from infrastructure)
 S3_BUCKET=$(aws cloudformation describe-stacks --stack-name ${STACK_NAME}-infra --region $REGION --query 'Stacks[0].Outputs[?OutputKey==`FrontendBucket`].OutputValue' --output text)
-aws s3 cp /tmp/backend-source.zip s3://$S3_BUCKET/backend-source.zip
+aws s3 cp "$TEMP_DIR/backend-source.zip" s3://$S3_BUCKET/backend-source.zip
 
 # Start CodeBuild
 echo "🚀 Starting CodeBuild..."
@@ -195,3 +199,6 @@ echo "✅ PHASE 3 COMPLETE (CodeBuild Version)"
 echo "Backend URL: $BACKEND_URL"
 echo ""
 echo "Next: Run phase4-frontend.sh"
+
+# Cleanup temp directory
+rm -rf "$TEMP_DIR"

@@ -168,10 +168,18 @@ git --version        # Should show Git version
 Set-ExecutionPolicy Bypass -Scope Process -Force; [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; iex ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))
 choco install vscode python docker-desktop git awscli nodejs -y
 
-# 2. Install AgentCore CLI
+# 2. Install AgentCore CLI and fix PATH
 pip install bedrock-agentcore-starter-toolkit
 
-# 3. Restart required message
+# 3. Add Python Scripts to PATH permanently
+$pythonScriptsPath = "$env:APPDATA\Python\Python314\Scripts"
+$currentPath = [Environment]::GetEnvironmentVariable("PATH", "User")
+if ($currentPath -notlike "*$pythonScriptsPath*") {
+    [Environment]::SetEnvironmentVariable("PATH", "$currentPath;$pythonScriptsPath", "User")
+    Write-Host "✅ Added Python Scripts to PATH"
+}
+
+# 4. Restart required message
 Write-Host "⚠️  RESTART REQUIRED for Docker Desktop. After restart, run the deployment script below."
 Read-Host "Press Enter to restart now, or Ctrl+C to restart manually"
 Restart-Computer
@@ -207,7 +215,7 @@ cd amzon-bedrock-agentcore-bank-analytics
 
 **Script 1 (Pre-restart):**
 ```powershell
-Set-ExecutionPolicy Bypass -Scope Process -Force; [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; iex ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1')); choco install vscode python docker-desktop git awscli nodejs -y; pip install bedrock-agentcore-starter-toolkit; Restart-Computer
+Set-ExecutionPolicy Bypass -Scope Process -Force; [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; iex ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1')); choco install vscode python docker-desktop git awscli nodejs -y; Start-Sleep -Seconds 10; pip install bedrock-agentcore-starter-toolkit; $pythonScriptsPath = "$env:APPDATA\Python\Python314\Scripts"; $currentPath = [Environment]::GetEnvironmentVariable("PATH", "User"); if ($currentPath -notlike "*$pythonScriptsPath*") { [Environment]::SetEnvironmentVariable("PATH", "$currentPath;$pythonScriptsPath", "User") }; Restart-Computer
 ```
 
 **Script 2 (Post-restart):**
