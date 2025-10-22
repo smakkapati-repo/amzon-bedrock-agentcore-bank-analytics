@@ -309,7 +309,7 @@ export const api = {
     if (analyzedDocs && analyzedDocs.length > 0) {
       const doc = analyzedDocs[0];
       if (doc.s3_key) {
-        prompt = `Use the chat_with_documents tool to answer: "${message}". S3 key: ${doc.s3_key}, Bank: ${doc.bank_name}`;
+        prompt = `Use the analyze_uploaded_pdf tool to answer: "${message}". S3 key: ${doc.s3_key}, Bank: ${doc.bank_name}, Analysis type: question`;
       } else {
         prompt = `Answer this question about ${doc.bank_name} ${doc.form_type} ${doc.year}: ${message}`;
       }

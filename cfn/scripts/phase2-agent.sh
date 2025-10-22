@@ -61,14 +61,7 @@ sleep 10
 # Check if config exists, if not create it
 if [ ! -f ".bedrock_agentcore.yaml" ]; then
     echo "Config file not found, creating..."
-    # Try multiple approaches for Windows compatibility
-    if command -v winpty &> /dev/null; then
-        # Windows Git Bash with winpty
-        echo -e "bank_iq_agent_v1\n\n\n\n\n\n\n\n" | winpty agentcore configure --entrypoint bank_iq_agent_v1.py
-    else
-        # Standard approach
-        echo -e "bank_iq_agent_v1\n\n\n\n\n\n\n\n" | agentcore configure --entrypoint bank_iq_agent_v1.py
-    fi
+    printf "bank_iq_agent_v1\n\n\n\n\n\n\n\n" | agentcore configure --entrypoint bank_iq_agent_v1.py
     echo "Config file created"
 fi
 
