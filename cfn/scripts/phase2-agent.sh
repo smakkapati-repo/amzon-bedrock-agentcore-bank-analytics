@@ -73,18 +73,20 @@ if agentcore status 2>/dev/null | grep -q "Agent ARN:"; then
 else
     # Deploy new agent
     echo "Deploying new agent..."
-    PYTHONIOENCODING=utf-8 agentcore launch -a bank_iq_agent_v1 --auto-update-on-conflict 2>&1 | tee /tmp/agent_deploy.log
+    TEMP_LOG="${SCRIPT_DIR}/temp/agent_deploy.log"
+    mkdir -p "${SCRIPT_DIR}/temp"
+    PYTHONIOENCODING=utf-8 agentcore launch -a bank_iq_agent_v1 --auto-update-on-conflict 2>&1 | tee "$TEMP_LOG"
     
     # Wait for deployment to complete and config to update
     sleep 10
     
     # Get agent ARN from deployment output (most reliable)
-    AGENT_ARN=$(grep -oE 'arn:aws:bedrock-agentcore:[^[:space:]]+:runtime/bank_iq_agent_v1-[a-zA-Z0-9]+' /tmp/agent_deploy.log | head -1)
+    AGENT_ARN=$(grep -oE 'arn:aws:bedrock-agentcore:[^[:space:]]+:runtime/bank_iq_agent_v1-[a-zA-Z0-9]+' "$TEMP_LOG" | head -1)
     if [ -n "$AGENT_ARN" ]; then
         echo "✅ Agent ARN from deployment log: $AGENT_ARN"
     else
         # Fallback: extract from deployment log
-        AGENT_ARN=$(grep -oE 'arn:aws:bedrock-agentcore:[^[:space:]]+:runtime/bank_iq_agent_v1-[a-zA-Z0-9]+' /tmp/agent_deploy.log | head -1)
+        AGENT_ARN=$(grep -oE 'arn:aws:bedrock-agentcore:[^[:space:]]+:runtime/bank_iq_agent_v1-[a-zA-Z0-9]+' "$TEMP_LOG" | head -1)
         echo "✅ Agent ARN from log: $AGENT_ARN"
     fi
 fi
