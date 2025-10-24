@@ -122,10 +122,10 @@ cd ..
 
 ### Phase 3: Deploy Backend
 ```bash
-./cfn/scripts/phase3-backend.sh
+./cfn/scripts/phase3-backend-codebuild.sh
 ```
 
-**Creates:** Docker image, ECR repository, ECS service
+**Creates:** Docker image (via CodeBuild), ECR repository, ECS service
 
 ### Phase 4: Deploy Frontend
 ```bash
@@ -353,7 +353,7 @@ agentcore launch -auc
 ```bash
 cd backend
 docker build -f Dockerfile.backend -t bankiq-backend .
-# Push to ECR (see phase3-backend.sh)
+# Push to ECR (see phase3-backend-codebuild.sh)
 # Force new deployment
 aws ecs update-service --cluster bankiq-cluster --service bankiq-backend-service --force-new-deployment
 ```

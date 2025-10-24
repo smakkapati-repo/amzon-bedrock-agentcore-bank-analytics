@@ -154,7 +154,7 @@ Resources:
     Type: AWS::Logs::LogGroup
     Properties:
       LogGroupName: !Sub '/ecs/${ProjectName}-backend'
-      RetentionInDays: 7
+      RetentionInDays: 14  # Extended for better troubleshooting
 
   # ============================================================================
   # ECS TASK DEFINITION
@@ -188,7 +188,7 @@ Resources:
             - Name: PORT
               Value: '3001'
             - Name: REGION
-              Value: us-west-2
+              Value: !Ref AWS::Region
             - Name: AGENTCORE_AGENT_ARN
               Value: !Ref AgentArn
             - Name: UPLOADED_DOCS_BUCKET
@@ -198,9 +198,17 @@ Resources:
               Value: 'true'
             - Name: COGNITO_REGION
               Value: !Ref AWS::Region
+            - Name: AGENTCORE_REGION
+              Value: !Ref AWS::Region
             - Name: COGNITO_USER_POOL_ID
               Value:
                 Fn::ImportValue: !Sub '${ProjectName}-auth-UserPoolId'
+            - Name: DEBUG_MODE
+              Value: 'true'
+            - Name: LOG_LEVEL
+              Value: 'debug'
+            - Name: NODE_ENV
+              Value: 'production'
           LogConfiguration:
             LogDriver: awslogs
             Options:

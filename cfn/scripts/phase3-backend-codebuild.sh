@@ -2,20 +2,32 @@
 set -e
 
 STACK_NAME=${1:-bankiq}
-REGION=${2:-us-west-2}
+REGION=${AWS_DEFAULT_REGION:-${2:-$(aws configure get region 2>/dev/null || echo "us-east-1")}}
 
 echo "=========================================="
 echo "Deploy Backend (CodeBuild Version)"
 echo "=========================================="
 
-# Get agent ARN
-if [ -f "/tmp/agent_arn.txt" ]; then
-    AGENT_ARN=$(cat /tmp/agent_arn.txt)
-    echo "Agent ARN: $AGENT_ARN"
-else
-    echo "ERROR: Agent ARN not found. Run phase2-agent.sh first."
+# Get agent ARN from YAML file (AWS pattern)
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+BACKEND_DIR="${SCRIPT_DIR}/../../backend"
+YAML_FILE="$BACKEND_DIR/.bedrock_agentcore.yaml"
+
+if [ ! -f "$YAML_FILE" ]; then
+    echo "ERROR: Agent config not found: $YAML_FILE"
+    echo "Run phase2-agent.sh first."
     exit 1
 fi
+
+# Extract agent ARN from YAML
+AGENT_ARN=$(grep "agent_arn:" "$YAML_FILE" | sed 's/.*agent_arn: *\(.*\)/\1/')
+
+if [ -z "$AGENT_ARN" ]; then
+    echo "ERROR: No agent_arn found in $YAML_FILE"
+    exit 1
+fi
+
+echo "✅ Agent ARN from config: $AGENT_ARN"
 
 # Get infrastructure outputs
 BACKEND_ECR=$(aws cloudformation describe-stacks --stack-name ${STACK_NAME}-infra --region $REGION --query 'Stacks[0].Outputs[?OutputKey==`BackendECRRepositoryUri`].OutputValue' --output text)

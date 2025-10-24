@@ -49,6 +49,13 @@ Security is embedded throughout: [AWS Cognito](https://docs.aws.amazon.com/cogni
 - **Infrastructure**: [ECS Fargate](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/AWS_Fargate.html), [ALB](https://docs.aws.amazon.com/elasticloadbalancing/latest/application/), [CloudFront](https://docs.aws.amazon.com/cloudfront/), [S3](https://docs.aws.amazon.com/s3/)
 - **Security**: [VPC](https://docs.aws.amazon.com/vpc/) private subnets, JWT verification, [IAM roles](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles.html), [Security Groups](https://docs.aws.amazon.com/vpc/latest/userguide/vpc-security-groups.html)
 
+## 📚 Documentation
+
+Complete documentation is available in the **[docs/](docs/)** folder:
+
+- **[Deployment Guide](docs/DEPLOYMENT_GUIDE.md)** - Step-by-step deployment instructions
+- **[CloudFormation Guide](docs/CLOUDFORMATION_GUIDE.md)** - Infrastructure details and scripts
+- **[Agent Development](docs/AGENT_DEVELOPMENT.md)** - Building and extending the AI agent
 
 ## ✨ Platform Features
 
@@ -279,6 +286,25 @@ aws logs start-live-tail --log-group-identifiers /ecs/bankiq-backend
 agentcore status
 ```
 
+## ⚡ Performance & Caching
+
+BankIQ+ uses **node-cache** for in-memory caching to dramatically improve performance:
+
+- **SEC Filings**: 2000ms → 1ms (24 hour cache)
+- **Bank Search**: 500ms → 1ms (7 day cache)
+- **FDIC Data**: 1500ms → 1ms (1 hour cache)
+
+**Cache Management:**
+```bash
+# View cache statistics
+curl http://localhost:3001/api/admin/cache-stats
+
+# Clear all caches
+curl -X POST http://localhost:3001/api/admin/clear-cache \
+  -H "Content-Type: application/json" \
+  -d '{"type": "all"}'
+```
+
 ## 💰 Cost Estimate
 
 Monthly costs (24/7 operation):
@@ -336,6 +362,8 @@ cd backend && agentcore status
 **Issue**: Agent not responding
 - Check AgentCore status: `cd backend && agentcore status`
 - Verify agent ARN in ECS task environment variables
+
+For detailed troubleshooting, see the [Deployment Guide](docs/DEPLOYMENT_GUIDE.md).
 
 ## 📄 License
 

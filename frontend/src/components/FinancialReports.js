@@ -96,6 +96,10 @@ function FinancialReports() {
           if (cleanContent.includes('DATA:')) {
             cleanContent = cleanContent.replace(/DATA:\s*\{[\s\S]*?\}\s*\n+/g, '').trim();
           }
+          // Remove duplicate "AI:" prefix if present
+          if (cleanContent.startsWith('AI:')) {
+            cleanContent = cleanContent.substring(3).trim();
+          }
           newHistory[lastIndex].content = cleanContent;
           newHistory[lastIndex].sources = response.sources || [];
         }
@@ -106,10 +110,21 @@ function FinancialReports() {
       
     } catch (err) {
       console.error('Chat error:', err);
-      setChatHistory(prev => [...prev, { 
-        role: 'assistant', 
-        content: `Error: ${err.message || 'Failed to get AI response'}` 
-      }]);
+      // Update the existing empty assistant message with error instead of adding new one
+      setChatHistory(prev => {
+        const newHistory = [...prev];
+        const lastIndex = newHistory.length - 1;
+        if (newHistory[lastIndex] && newHistory[lastIndex].role === 'assistant') {
+          newHistory[lastIndex].content = `Error: ${err.message || 'Failed to get AI response'}`;
+        } else {
+          // Fallback: add new error message if no empty message exists
+          newHistory.push({ 
+            role: 'assistant', 
+            content: `Error: ${err.message || 'Failed to get AI response'}` 
+          });
+        }
+        return newHistory;
+      });
     } finally {
       setChatLoading(false);
     }
@@ -125,14 +140,20 @@ function FinancialReports() {
       if (mode === 'local' && analyzedDocs.length > 0) {
         const doc = analyzedDocs[0];
         if (doc.s3_key) {
-          inputText = `Use the analyze_uploaded_pdf tool to generate a comprehensive financial analysis report. ` +
-            `S3 key: ${doc.s3_key}, Bank: ${doc.bank_name}, Analysis type: comprehensive`;
+          inputText = `Use the analyze_uploaded_pdf tool to generate a comprehensive financial analysis report.
+
+Call analyze_uploaded_pdf with these parameters:
+- s3_key: "${doc.s3_key}"
+- bank_name: "${doc.bank_name}"
+- analysis_type: "comprehensive"
+
+Generate a detailed 8-section report with markdown headers covering all aspects of the bank's financial performance.`;
         } else {
           inputText = `Generate a comprehensive financial analysis report for ${selectedBank} based on their ${doc.form_type} filing for fiscal year ${doc.year}. ` +
             `Use publicly available data and SEC filings.`;
         }
       } else {
-        inputText = `Generate comprehensive financial report for ${selectedBank}`;
+        inputText = `Use the generate_bank_report tool to create a comprehensive financial analysis report for ${selectedBank}. Call generate_bank_report with bank_name: "${selectedBank}".`;
       }
       
       // Submit async job
@@ -279,6 +300,26 @@ function FinancialReports() {
                 >
                   {searching ? 'Searching...' : 'Search'}
                 </Button>
+                {(selectedBank || searchResults.length > 0 || chatHistory.length > 0 || fullReport) && (
+                  <Button 
+                    variant="outlined" 
+                    onClick={() => {
+                      setSelectedBank('');
+                      setSelectedBankCik(null);
+                      setChatHistory([]);
+                      setFullReport('');
+                      setReports({ '10-K': [], '10-Q': [] });
+                      setSearchResults([]);
+                      setSearchBank('');
+                      setError('');
+                      setReportLoading(false);
+                      setPollingStatus('');
+                    }}
+                    color="secondary"
+                  >
+                    🗑️ Clear All
+                  </Button>
+                )}
               </Box>
               
               {/* Search Results */}
@@ -299,6 +340,8 @@ function FinancialReports() {
                             setError('');
                             setSearchResults([]);
                             setSearchBank('');
+                            setReportLoading(false);
+                            setPollingStatus('');
                           }}
                           sx={{ textTransform: 'none', fontSize: '0.8rem' }}
                         >
@@ -323,6 +366,8 @@ function FinancialReports() {
                         setFullReport('');
                         setReports({ '10-K': [], '10-Q': [] });
                         setError('');
+                        setReportLoading(false);
+                        setPollingStatus('');
                       }}
                       sx={{ textTransform: 'none', fontSize: '0.8rem' }}
                     >
@@ -398,6 +443,24 @@ function FinancialReports() {
                     {loading ? <CircularProgress size={20} sx={{ mr: 1 }} /> : '📤'} Upload
                   </Button>
                 )}
+                {(uploadedFiles.length > 0 || analyzedDocs.length > 0) && (
+                  <Button 
+                    variant="outlined" 
+                    onClick={() => {
+                      setUploadedFiles([]);
+                      setAnalyzedDocs([]);
+                      setChatHistory([]);
+                      setFullReport('');
+                      setSelectedBank('');
+                      setError('');
+                      setReportLoading(false);
+                      setPollingStatus('');
+                    }}
+                    color="secondary"
+                  >
+                    🗑️ Clear All
+                  </Button>
+                )}
               </Box>
               
               {analyzedDocs.length > 0 && (
@@ -434,6 +497,11 @@ function FinancialReports() {
                   <DescriptionIcon sx={{ mr: 1 }} />
                   {mode === 'local' ? 'Uploaded Documents' : 'Available SEC Filings'}
                 </Typography>
+                {mode === 'live' && selectedBank && (
+                  <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mb: 1 }}>
+                    📅 Showing filings from 2023-2025
+                  </Typography>
+                )}
                 {loading ? (
                   <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
                     <CircularProgress />

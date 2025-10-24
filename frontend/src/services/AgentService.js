@@ -1,5 +1,6 @@
 /**
  * AgentCore Service - Handles communication with AgentCore backend
+ * Updated to use async jobs for reliability (no 30s timeout)
  */
 class AgentService {
   constructor() {
@@ -19,12 +20,12 @@ class AgentService {
       if (status.status === 'connected') {
         this.connected = true;
         this.emit('connection', { status: 'connected', method: 'http' });
-        console.log('Strands Agent connected via HTTP');
+        console.log('AgentCore Agent connected via HTTP');
       }
     } catch (error) {
       this.connected = false;
       this.emit('connection', { status: 'disconnected' });
-      console.log('Agent connection failed');
+      console.log('AgentCore Agent connection failed');
     }
   }
 
@@ -37,7 +38,7 @@ class AgentService {
     return false;
   }
 
-  // Chat with AI using agents
+  // Chat with AI using agents (async jobs for reliability)
   async chatWithAgent(question, bankName, useRAG = true) {
     // Try WebSocket first
     if (this.sendWebSocketMessage('chat_question', {
@@ -48,22 +49,47 @@ class AgentService {
       return { streaming: true, method: 'websocket' };
     }
 
-    // Fallback to HTTP
-    const response = await fetch(`${this.baseURL}/api/chat`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        request_type: 'chat',
-        question,
-        bankName,
-        useRAG
-      })
-    });
-
-    return await response.json();
+    // Fallback to async jobs (no timeout limit)
+    try {
+      const jobResponse = await fetch(`${this.baseURL}/api/jobs/submit`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          inputText: `Use the answer_banking_question tool to answer: "${question}" about ${bankName || 'general banking'}`,
+          jobType: 'chat'
+        })
+      });
+      
+      const job = await jobResponse.json();
+      
+      // Poll for completion
+      for (let i = 0; i < 60; i++) {
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        
+        const statusResponse = await fetch(`${this.baseURL}/api/jobs/${job.jobId}`);
+        const status = await statusResponse.json();
+        
+        if (status.status === 'completed' || status.status === 'failed') {
+          const resultResponse = await fetch(`${this.baseURL}/api/jobs/${job.jobId}/result`);
+          const result = await resultResponse.json();
+          
+          if (result.status === 'failed') {
+            throw new Error(result.error || 'Chat processing failed');
+          }
+          
+          return { response: result.result, method: 'async-job' };
+        }
+      }
+      
+      throw new Error('Chat request timeout');
+      
+    } catch (error) {
+      console.error('Chat error:', error);
+      throw error;
+    }
   }
 
-  // Generate report with streaming
+  // Generate report with streaming (async jobs for reliability)
   async generateReport(bankName, mode = 'rag') {
     // Try WebSocket first
     if (this.sendWebSocketMessage('generate_report', {
@@ -73,8 +99,69 @@ class AgentService {
       return { streaming: true, method: 'websocket' };
     }
 
-    // Fallback to SSE
-    return this.generateReportSSE(bankName, mode);
+    // Fallback to async jobs
+    try {
+      const jobResponse = await fetch(`${this.baseURL}/api/jobs/submit`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          inputText: `Use the generate_bank_report tool to create a comprehensive financial analysis report for ${bankName}. Call generate_bank_report with bank_name: "${bankName}".`,
+          jobType: 'full-report'
+        })
+      });
+      
+      const job = await jobResponse.json();
+      
+      // Emit progress events
+      this.emit('report_start', { bank_name: bankName });
+      
+      // Poll for completion with progress updates
+      for (let i = 0; i < 120; i++) {
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        
+        const statusResponse = await fetch(`${this.baseURL}/api/jobs/${job.jobId}`);
+        const status = await statusResponse.json();
+        
+        // Emit progress
+        const progress = Math.min(10 + (i * 0.75), 95);
+        this.emit('report_chunk', { 
+          data: { 
+            progress, 
+            status: i < 30 ? 'Analyzing financial data...' : 
+                   i < 60 ? 'Generating insights...' : 
+                   'Finalizing report...' 
+          } 
+        });
+        
+        if (status.status === 'completed' || status.status === 'failed') {
+          const resultResponse = await fetch(`${this.baseURL}/api/jobs/${job.jobId}/result`);
+          const result = await resultResponse.json();
+          
+          if (result.status === 'failed') {
+            this.emit('error', { message: result.error || 'Report generation failed' });
+            throw new Error(result.error || 'Report generation failed');
+          }
+          
+          // Emit completion
+          this.emit('report_chunk', { 
+            data: { 
+              chunk: result.result,
+              progress: 100,
+              complete: true,
+              status: 'Report generation completed!'
+            } 
+          });
+          
+          return { report: result.result, method: 'async-job' };
+        }
+      }
+      
+      throw new Error('Report generation timeout');
+      
+    } catch (error) {
+      this.emit('error', { message: error.message });
+      throw error;
+    }
   }
 
   // SSE fallback for report generation
@@ -109,7 +196,7 @@ class AgentService {
     });
   }
 
-  // Peer analysis using agents
+  // Peer analysis using agents (async jobs for reliability)
   async analyzePeers(baseBank, peerBanks, metric) {
     // Try WebSocket first
     if (this.sendWebSocketMessage('peer_analysis', {
@@ -120,19 +207,53 @@ class AgentService {
       return { streaming: true, method: 'websocket' };
     }
 
-    // Fallback to HTTP
-    const response = await fetch(`${this.baseURL}/api/analyze-peers`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        request_type: 'peer_analysis',
-        baseBank,
-        peerBanks,
-        metric
-      })
-    });
-
-    return await response.json();
+    // Fallback to async jobs
+    try {
+      const jobResponse = await fetch(`${this.baseURL}/api/jobs/submit`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          inputText: `Compare ${baseBank} vs ${peerBanks.join(', ')} using ${metric}. Provide comprehensive analysis with data.`,
+          jobType: 'peer-analysis'
+        })
+      });
+      
+      const job = await jobResponse.json();
+      
+      // Poll for completion
+      for (let i = 0; i < 60; i++) {
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        
+        const statusResponse = await fetch(`${this.baseURL}/api/jobs/${job.jobId}`);
+        const status = await statusResponse.json();
+        
+        if (status.status === 'completed' || status.status === 'failed') {
+          const resultResponse = await fetch(`${this.baseURL}/api/jobs/${job.jobId}/result`);
+          const result = await resultResponse.json();
+          
+          if (result.status === 'failed') {
+            throw new Error(result.error || 'Analysis failed');
+          }
+          
+          return { 
+            success: true, 
+            result: {
+              analysis: result.result,
+              data: [],
+              base_bank: baseBank,
+              peer_banks: peerBanks
+            },
+            method: 'async-job'
+          };
+        }
+      }
+      
+      throw new Error('Analysis request timeout');
+      
+    } catch (error) {
+      console.error('Peer analysis error:', error);
+      throw error;
+    }
   }
 
   // Event listener management

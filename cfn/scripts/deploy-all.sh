@@ -17,7 +17,7 @@ CYAN='\033[0;36m'
 NC='\033[0m'
 
 STACK_NAME=${1:-bankiq}
-REGION=${2:-$(aws configure get region 2>/dev/null || echo "us-east-1")}
+REGION=${AWS_DEFAULT_REGION:-${2:-$(aws configure get region 2>/dev/null || echo "us-east-1")}}
 
 echo -e "${PURPLE}"
 echo "═══════════════════════════════════════════════════════════════"
@@ -72,6 +72,9 @@ echo -e "${GREEN}✅ Phase 2 Complete!${NC}\n"
 echo -e "${BLUE}┌─────────────────────────────────────────────────────────────┐${NC}"
 echo -e "${BLUE}│${NC} ${GREEN}[3/5]${NC} ${CYAN}Building & Deploying Backend Container...${NC}           ${BLUE}│${NC}"
 echo -e "${BLUE}└─────────────────────────────────────────────────────────────┘${NC}"
+
+# Backend will read agent ARN directly from .bedrock_agentcore.yaml
+
 ${SCRIPT_DIR}/phase3-backend-codebuild.sh $STACK_NAME $REGION
 if [ $? -ne 0 ]; then
     echo -e "${RED}❌ Phase 3 failed${NC}"
@@ -126,7 +129,8 @@ echo "  ✅ DEPLOYMENT COMPLETE WITH COGNITO!"
 echo "═══════════════════════════════════════════════════════════════"
 echo -e "${NC}"
 echo -e "${CYAN}🌐 Application URL: ${YELLOW}$CLOUDFRONT_URL${NC}"
-echo -e "${CYAN}🔐 Login URL: ${YELLOW}https://bankiq-auth-164543933824.auth.$REGION.amazoncognito.com${NC}"
+COGNITO_DOMAIN=$(aws cloudformation describe-stacks --stack-name ${STACK_NAME}-auth --region $REGION --query 'Stacks[0].Outputs[?OutputKey==`CognitoDomain`].OutputValue' --output text 2>/dev/null || echo "bankiq-auth-$(aws sts get-caller-identity --query Account --output text)")
+echo -e "${CYAN}🔐 Login URL: ${YELLOW}https://$COGNITO_DOMAIN.auth.$REGION.amazoncognito.com${NC}"
 echo -e "${CYAN}📊 View logs: ${YELLOW}aws logs tail /ecs/bankiq-backend --follow${NC}"
 echo -e "${CYAN}🔍 Monitor: ${YELLOW}agentcore status${NC}"
 echo ""

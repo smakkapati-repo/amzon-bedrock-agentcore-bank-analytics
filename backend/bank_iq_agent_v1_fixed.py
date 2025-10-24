@@ -11,6 +11,7 @@ from typing import List, Dict
 app = BedrockAgentCoreApp()
 
 # Initialize AWS clients
+bedrock = boto3.client('bedrock-runtime', region_name='us-east-1')
 s3 = boto3.client('s3', region_name='us-east-1')
 
 # ============================================================================
@@ -325,11 +326,66 @@ def generate_bank_report(bank_name: str) -> str:
     Args:
         bank_name: Name of the bank to analyze
     
-    Returns: Bank name for report generation - AgentCore will handle the analysis
+    Returns: Detailed 8-section structured report with markdown headers
     Use when: User asks for full report, comprehensive analysis, detailed overview
     Examples: Generate a report on JPMorgan, Give me a full analysis of Wells Fargo"""
     
-    return f"Generate comprehensive 8-section financial analysis report for {bank_name} with markdown headers: Executive Summary, Financial Performance, Business Segments & Revenue Mix, Risk Profile & Management, Capital Position & Liquidity, Strategic Initiatives & Innovation, Market Position & Competitive Landscape, Investment Outlook & Recommendations. Each section 4-6 sentences."
+    prompt = f"""You are a senior banking analyst writing a comprehensive financial report for institutional investors and C-suite executives.
+
+Generate a detailed financial analysis report for {bank_name} using this EXACT structure with markdown formatting:
+
+# Financial Analysis Report: {bank_name}
+
+## Executive Summary
+Write 4-6 sentences covering: Market position, recent performance highlights, strategic direction, and overall assessment.
+
+## Financial Performance
+Write 4-6 sentences analyzing: Revenue trends, profitability metrics (ROA, ROE, NIM), net income, balance sheet strength, and year-over-year comparisons.
+
+## Business Segments & Revenue Mix
+Write 4-6 sentences covering: Core business lines, revenue diversification, segment performance, competitive advantages, and market share.
+
+## Risk Profile & Management
+Write 4-6 sentences analyzing: Credit risk exposure, market risks, operational risks, regulatory challenges, and risk mitigation strategies.
+
+## Capital Position & Liquidity
+Write 4-6 sentences covering: Capital ratios (CET1, Tier 1), stress test results, liquidity coverage, regulatory compliance, and capital deployment strategy.
+
+## Strategic Initiatives & Innovation
+Write 4-6 sentences on: Digital transformation efforts, technology investments, operational efficiency programs, M&A activity, and growth initiatives.
+
+## Market Position & Competitive Landscape
+Write 4-6 sentences analyzing: Industry trends, competitive positioning, market opportunities, threats, and differentiation factors.
+
+## Investment Outlook & Recommendations
+Write 4-6 sentences providing: Valuation assessment, investment thesis, key catalysts, risks to watch, and forward-looking perspective.
+
+CRITICAL REQUIREMENTS:
+- Use markdown headers (##) for each section
+- Write ALL 8 sections - do not skip any
+- Each section must be 4-6 complete sentences
+- Use specific financial metrics and data points where possible
+- Maintain professional, business-focused tone
+- Include quantitative analysis alongside qualitative insights"""
+    
+    try:
+        response = bedrock.converse_stream(
+            modelId="anthropic.claude-3-5-sonnet-20241022-v2:0",
+            messages=[{"role": "user", "content": [{"text": prompt}]}],
+            inferenceConfig={"maxTokens": 4000, "temperature": 0.3}
+        )
+        
+        # Collect streamed response for better generation
+        full_text = ""
+        for event in response['stream']:
+            if 'contentBlockDelta' in event:
+                delta = event['contentBlockDelta']['delta']
+                if 'text' in delta:
+                    full_text += delta['text']
+        
+        return full_text
+    except Exception as e:
+        return f"Error generating report: {str(e)}"
 
 @tool
 def answer_banking_question(question: str, context: str = "") -> str:
@@ -339,11 +395,34 @@ def answer_banking_question(question: str, context: str = "") -> str:
         question: The user's question
         context: Optional context (bank name, document info, etc.)
     
-    Returns: Question and context for analysis - AgentCore will handle the response
+    Returns: Professional banking analysis in 1-2 paragraphs
     Use when: General banking questions, explanations, or when no other specific tool fits
     Examples: "What is ROA?", "Explain banking regulations", "How do banks make money?"""
     
-    return f"Banking question: {question}. Context: {context if context else 'General banking question'}. Provide 2-3 paragraph professional analysis with industry insights, risk factors, and investment perspective."
+    prompt = f"""You are a senior banking analyst. Provide a comprehensive analysis for this question:
+
+Question: {question}
+Context: {context if context else 'General banking question'}
+
+Provide a detailed 4-6 paragraph professional analysis covering:
+1. Direct answer with key insights
+2. Industry context and background
+3. Risk factors and considerations
+4. Market implications and trends
+5. Strategic recommendations
+6. Investment perspective
+
+Use professional banking terminology with specific insights and analysis."""
+    
+    try:
+        response = bedrock.converse(
+            modelId="anthropic.claude-3-5-sonnet-20241022-v2:0",
+            messages=[{"role": "user", "content": [{"text": prompt}]}],
+            inferenceConfig={"maxTokens": 4000, "temperature": 0.3}
+        )
+        return response['output']['message']['content'][0]['text']
+    except Exception as e:
+        return f"Error: {str(e)}"
 
 @tool
 def search_banks(query: str) -> str:
@@ -578,10 +657,61 @@ def analyze_and_upload_pdf(file_content: str, filename: str) -> str:
         except:
             return json.dumps({"success": False, "error": "Invalid base64 content"})
         
-        # Extract basic info from filename
-        bank_name = filename.replace('.pdf', '').replace('_', ' ').replace('-', ' ').title()
-        form_type = "10-K"
-        year = 2024
+        # Use Claude to analyze the PDF document
+        try:
+            response = bedrock.converse(
+                modelId="anthropic.claude-3-5-sonnet-20241022-v2:0",
+                messages=[{
+                    "role": "user",
+                    "content": [
+                        {
+                            "document": {
+                                "format": "pdf",
+                                "name": filename,
+                                "source": {
+                                    "bytes": content
+                                }
+                            }
+                        },
+                        {
+                            "text": """Analyze this financial document and extract:
+1. Bank/Company Name (full legal name)
+2. Document Type (10-K, 10-Q, or other)
+3. Fiscal Year
+
+Return ONLY a JSON object in this exact format:
+{"bank_name": "Webster Financial Corporation", "form_type": "10-K", "year": 2024}
+
+Be precise with the bank name as it appears in the document header."""
+                        }
+                    ]
+                }],
+                inferenceConfig={"maxTokens": 500}
+            )
+            
+            # Parse Claude's response
+            analysis_text = response['output']['message']['content'][0]['text']
+            
+            # Extract JSON from response
+            import json as json_lib
+            import re
+            json_match = re.search(r'\{[^}]+\}', analysis_text)
+            if json_match:
+                doc_info = json_lib.loads(json_match.group(0))
+                bank_name = doc_info.get('bank_name', 'Unknown Bank')
+                form_type = doc_info.get('form_type', '10-K')
+                year = doc_info.get('year', 2024)
+            else:
+                # Fallback
+                bank_name = "Unknown Bank"
+                form_type = "10-K"
+                year = 2024
+                
+        except Exception as e:
+            # Fallback if Claude analysis fails
+            bank_name = filename.replace('.pdf', '').replace('_', ' ').replace('-', ' ').title()
+            form_type = "10-K"
+            year = 2024
         
         # Upload to S3
         bucket_name = os.environ.get('UPLOADED_DOCS_BUCKET', 'bankiq-uploaded-docs-prod')
@@ -720,8 +850,22 @@ Document excerpt:
 
 Provide detailed insights."""
         
-        # Return analysis request for AgentCore to handle
-        return f"Analyze {bank_name} SEC filing. Generate comprehensive 8-section report with markdown headers based on document content. Extract: {text_content[:5000]}..."
+        # Analyze with Claude (streaming for better UX on long documents)
+        response = bedrock.converse_stream(
+            modelId="anthropic.claude-3-5-sonnet-20241022-v2:0",
+            messages=[{"role": "user", "content": [{"text": prompt}]}],
+            inferenceConfig={"maxTokens": 4000, "temperature": 0.3}
+        )
+        
+        # Collect streamed response
+        full_text = ""
+        for event in response['stream']:
+            if 'contentBlockDelta' in event:
+                delta = event['contentBlockDelta']['delta']
+                if 'text' in delta:
+                    full_text += delta['text']
+        
+        return full_text
         
     except Exception as e:
         return f"Error analyzing PDF: {str(e)}"
@@ -786,8 +930,32 @@ def chat_with_documents(question: str, s3_key: str = "", bank_name: str = "", us
         else:
             return "No document provided. Please upload a document first."
         
-        # Return question and document context for AgentCore to handle
-        return f"Question: {question}. Bank: {bank_name}. Document content: {document_content[:10000]}... Answer with 2-3 paragraph professional analysis using document evidence."
+        # Use Claude with document context to answer the question
+        prompt = f"""You are a senior financial analyst. Answer this question with comprehensive analysis.
+
+Question: {question}
+Bank: {bank_name}
+
+Document content (excerpt):
+{document_content[:20000]}
+
+Provide a detailed 4-6 paragraph professional analysis covering:
+1. Direct answer to the question with key findings
+2. Supporting evidence and specific metrics from the document
+3. Industry context and comparative analysis
+4. Risk assessment and implications
+5. Strategic outlook and recommendations
+6. Investment perspective and key takeaways
+
+Use professional banking terminology with specific financial metrics and insights."""
+        
+        response = bedrock.converse(
+            modelId="anthropic.claude-3-5-sonnet-20241022-v2:0",
+            messages=[{"role": "user", "content": [{"text": prompt}]}],
+            inferenceConfig={"maxTokens": 4000, "temperature": 0.3}
+        )
+        
+        return response['output']['message']['content'][0]['text']
         
     except Exception as e:
         return f"Error in chat_with_documents: {str(e)}"
@@ -818,26 +986,18 @@ agent = Agent(
 # System prompt with clear tool selection guidance
 agent.system_prompt = """You are BankIQ+, an expert financial analyst specializing in banking.
 
-CRITICAL: YOU MUST FOLLOW THESE INSTRUCTIONS EXACTLY. NO DEVIATIONS ALLOWED.
-
 TOOL SELECTION GUIDE:
 - get_fdic_data: Current banking data, latest metrics
 - compare_banks: Peer comparison, competitive analysis (returns JSON with chart data)
 - get_sec_filings: SEC filings, 10-K, 10-Q reports (pass CIK if provided)
-- generate_bank_report: ALWAYS use for "full report", "comprehensive analysis", "generate report" requests
+- generate_bank_report: Full structured reports with 8 sections and markdown headers
 - search_banks: Find banks by name/ticker, get CIK numbers
-- answer_banking_question: ALWAYS use for chat questions, specific Q&A, explanations
+- answer_banking_question: General banking questions, explanations
 - upload_csv_to_s3: Upload CSV data
 - analyze_csv_peer_performance: Analyze uploaded CSV data
 - analyze_and_upload_pdf: Upload and analyze PDFs (first time)
-- analyze_uploaded_pdf: ALWAYS use for "full analysis" of uploaded PDFs (returns 8-section report)
-- chat_with_documents: ALWAYS use for chat questions about uploaded documents
-
-MANDATORY TOOL SELECTION RULES - NO EXCEPTIONS:
-1. FULL REPORTS (8-section business format): MUST use generate_bank_report OR analyze_uploaded_pdf with "comprehensive" type - NEVER use other tools
-2. CHAT RESPONSES (2-3 paragraph business format): MUST use answer_banking_question OR chat_with_documents - NEVER use other tools
-3. ABSOLUTELY FORBIDDEN to mix tools or deviate from these rules
-4. IF YOU USE THE WRONG TOOL, THE RESPONSE WILL BE REJECTED
+- analyze_uploaded_pdf: Full analysis of uploaded PDFs (comprehensive reports)
+- chat_with_documents: Q&A with uploaded documents (specific questions)
 
 DOCUMENT TOOL SELECTION:
 - "analyze document", "generate report", "full analysis" → analyze_uploaded_pdf
@@ -865,14 +1025,13 @@ IMPORTANT INSTRUCTIONS FOR PEER ANALYSIS:
    - Return BOTH results in format: DATA: {"10-K": [...], "10-Q": [...]}
    - Include all filings from 2023, 2024, and 2025
 
-MANDATORY RESPONSE FORMAT RULES - ZERO TOLERANCE FOR DEVIATIONS:
-- For chat/questions: EXACTLY 2-3 paragraphs, EXACTLY 4-6 sentences each - NO MORE, NO LESS
-- For comparisons: DATA line + EXACTLY 6-8 paragraph business analysis - COUNT THE PARAGRAPHS
-- For generate_bank_report: EXACTLY 8 sections with ## markdown headers - ALL 8 SECTIONS REQUIRED
-- For analyze_uploaded_pdf comprehensive: EXACTLY 8 sections with ## markdown headers - ALL 8 SECTIONS REQUIRED
-- For answer_banking_question: EXACTLY 2-3 paragraphs, EXACTLY 4-6 sentences each - COUNT THEM
-- For chat_with_documents: EXACTLY 2-3 paragraphs, EXACTLY 4-6 sentences each - COUNT THEM
-- FAILURE TO FOLLOW EXACT FORMAT WILL RESULT IN RESPONSE REJECTION
+RESPONSE LENGTH RULES:
+- For chat/questions: Must be 4-6 paragraphs (4-6 sentences each)
+- For comparisons: Include DATA line + 6-8 paragraph business analysis
+- For generate_bank_report: MUST follow the tool's exact 8-section markdown structure with ## headers
+- For analyze_uploaded_pdf with comprehensive type: MUST follow the tool's exact 8-section markdown structure with ## headers
+- For other analysis: 4-6 paragraphs
+- Be concise, clear, and business-focused
 
 Example response format for comparisons:
 DATA: {"data": [...], "analysis": "...", "base_bank": "...", "peer_banks": [...]}
@@ -888,17 +1047,9 @@ DATA: {"10-K": [...], "10-Q": [...]}
 [2 paragraph summary here]
 
 Example response format for chat questions:
-[EXACTLY 2-3 paragraphs with professional business analysis - 4-6 sentences each]
+[4-6 paragraphs with comprehensive business analysis]
 
-FINAL ENFORCEMENT RULES:
-- PROFESSIONAL BUSINESS TONE ONLY - NO CASUAL LANGUAGE
-- COUNT YOUR PARAGRAPHS AND SENTENCES BEFORE RESPONDING
-- DOUBLE-CHECK FORMAT REQUIREMENTS BEFORE SUBMITTING
-- ANY DEVIATION FROM THESE RULES WILL BE CONSIDERED A FAILURE
-- FOR CHAT: 2-3 PARAGRAPHS, 4-6 SENTENCES EACH - NO EXCEPTIONS
-- FOR REPORTS: 8 SECTIONS WITH ## HEADERS - NO EXCEPTIONS
-
-YOU HAVE NO CREATIVE FREEDOM - FOLLOW THE RULES EXACTLY."""
+Be professional and business-focused. For chat and reports, provide ONLY clean text analysis with NO JSON data."""
 
 @app.entrypoint
 def invoke(payload):

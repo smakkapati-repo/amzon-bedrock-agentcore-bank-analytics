@@ -20,29 +20,7 @@ async function getAuthHeaders() {
   return headers;
 }
 
-async function callBackend(inputText) {
-  const headers = await getAuthHeaders();
-  
-  const response = await fetch(`${BACKEND_URL}/api/invoke-agent`, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({ inputText })
-  });
-  
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}));
-    throw new Error(errorData.error || `Backend error: ${response.status}`);
-  }
-  
-  const data = await response.json();
-  
-  // Check if backend returned an error in the response body
-  if (data.error) {
-    throw new Error(data.error);
-  }
-  
-  return data.output;
-}
+// Removed callBackend function - all endpoints now use async jobs for reliability
 
 export const api = {
   async getSECReports(bankName, year, useRag, cik) {
@@ -69,9 +47,11 @@ export const api = {
       }
     }
     
-    // Fallback to agent
-    let prompt = `Get all SEC filings for ${bankName} for years 2024 and 2025. I need both 10-K annual reports and 10-Q quarterly reports.`;
-    const response = await callBackend(prompt);
+    // Fallback to agent using async jobs
+    let prompt = `Get all SEC filings for ${bankName} for years 2023, 2024, and 2025. I need both 10-K annual reports and 10-Q quarterly reports.`;
+    const job = await this.submitJob(prompt);
+    const result = await this.pollJobUntilComplete(job.jobId);
+    const response = result.result;
     
     // Try to parse DATA: format first
     try {
@@ -129,75 +109,141 @@ export const api = {
   },
 
   async analyzePeers(baseBank, peerBanks, metric) {
-    const prompt = `Compare ${baseBank} vs ${peerBanks.join(', ')} using ${metric}`;
+    const prompt = `Use the compare_banks tool with these exact parameters:
+- base_bank: "${baseBank}"
+- peer_banks: ["${peerBanks.join('", "')}"]
+- metric: "${metric}"
+
+CRITICAL INSTRUCTIONS:
+1. Call the compare_banks tool
+2. Return the tool's JSON output EXACTLY as-is on the first line
+3. Then provide your expanded analysis below it
+
+Format:
+{"data": [...], "base_bank": "...", "peer_banks": [...], "analysis": "...", "source": "..."}
+
+Your detailed analysis here...`;
     
-    // Use async job pattern
+    // Use async job pattern for better reliability
     const job = await this.submitJob(prompt);
     const result = await this.pollJobUntilComplete(job.jobId);
     const response = result.result;
     
-    // The agent returns data in format: "DATA: {...json...}\n\nAnalysis text"
+    console.log('Agent response for peer analysis:', response);
+    
+    // Extract chart data from agent response
+    let chartData = [];
+    let extractedAnalysis = '';
+    
+    // Pattern 1: Look for complete JSON object from tool (most common)
     try {
-      // Look for DATA: prefix - handle both regular and escaped JSON
-      const dataMatch = response.match(/DATA:\s*(\{[\s\S]*?\})(?:\s*\n|##)/);
-      if (dataMatch) {
-        const parsed = JSON.parse(dataMatch[1]);
-        // Remove the DATA: line from analysis
-        const analysisText = response.replace(/DATA:[\s\S]*?\}(?:\s*\n|##)/, '').trim();
-        
-        return { 
-          success: true, 
-          result: {
-            data: parsed.data || [],
-            analysis: analysisText || parsed.analysis || response,
-            base_bank: parsed.base_bank || baseBank,
-            peer_banks: parsed.peer_banks || peerBanks
-          }
-        };
-      }
+      // Find JSON that has data, base_bank, peer_banks, analysis, source
+      const jsonPattern = /\{[^]*?"data"\s*:\s*\[[^]*?\][^]*?"base_bank"[^]*?"peer_banks"[^]*?"analysis"[^]*?"source"[^]*?\}/;
+      const match = response.match(jsonPattern);
       
-      // Fallback: Look for JSON object anywhere in the response
-      const jsonMatch = response.match(/\{[\s\S]*?"data"[\s\S]*?\[[\s\S]*?\][\s\S]*?\}/);
-      if (jsonMatch) {
-        const parsed = JSON.parse(jsonMatch[0]);
+      if (match) {
+        const parsed = JSON.parse(match[0]);
         if (parsed.data && Array.isArray(parsed.data)) {
-          // Remove JSON from analysis text
-          const analysisText = response.replace(jsonMatch[0], '').trim();
+          chartData = parsed.data;
+          // Everything after the JSON is the expanded analysis
+          const jsonEndIndex = response.indexOf(match[0]) + match[0].length;
+          extractedAnalysis = response.substring(jsonEndIndex).trim();
           
-          return { 
-            success: true, 
-            result: {
-              data: parsed.data,
-              analysis: analysisText || parsed.analysis || response,
-              base_bank: parsed.base_bank || baseBank,
-              peer_banks: parsed.peer_banks || peerBanks
-            }
-          };
+          // If no expanded analysis, use the tool's analysis
+          if (!extractedAnalysis || extractedAnalysis.length < 50) {
+            extractedAnalysis = parsed.analysis || '';
+          }
+          
+          console.log('✓ Extracted chart data:', chartData.length, 'records');
+          console.log('✓ Analysis length:', extractedAnalysis.length, 'chars');
         }
       }
     } catch (e) {
-      console.log('Could not parse JSON from response:', e);
+      console.log('Could not parse tool JSON:', e.message);
     }
     
-    // If no structured data, return the text analysis
+    // Pattern 2: Fallback - try to find any JSON with data array
+    if (chartData.length === 0) {
+      try {
+        const lines = response.split('\n');
+        for (const line of lines) {
+          if (line.trim().startsWith('{') && line.includes('"data"')) {
+            try {
+              const parsed = JSON.parse(line);
+              if (parsed.data && Array.isArray(parsed.data) && parsed.data.length > 0) {
+                chartData = parsed.data;
+                // Remove this line from analysis
+                extractedAnalysis = response.replace(line, '').trim();
+                console.log('✓ Extracted chart data from line:', chartData.length, 'records');
+                break;
+              }
+            } catch (e) {
+              continue;
+            }
+          }
+        }
+      } catch (e) {
+        console.log('Could not parse line-by-line:', e.message);
+      }
+    }
+    
+    // Pattern 3: Clean up any remaining JSON fragments in analysis
+    if (extractedAnalysis && extractedAnalysis.includes('"Bank"')) {
+      // Remove individual data point objects
+      extractedAnalysis = extractedAnalysis.replace(/\{[^}]*"Bank"\s*:\s*"[^"]*"[^}]*\}[,\s]*/g, '');
+      // Remove array brackets
+      extractedAnalysis = extractedAnalysis.replace(/^\s*\[|\]\s*$/g, '');
+      // Clean up whitespace
+      extractedAnalysis = extractedAnalysis.trim();
+    }
+    
+    // If still no data, log warning
+    if (chartData.length === 0) {
+      console.warn('⚠️ No chart data extracted. Response preview:', response.substring(0, 200));
+    }
+    
+    // If no analysis extracted, use the whole response
+    if (!extractedAnalysis) {
+      extractedAnalysis = response;
+    }
+    
     return { 
       success: true, 
-      result: { 
-        analysis: response, 
-        data: [],
-        note: 'Analysis provided by AgentCore AI - chart data not available'
-      } 
+      result: {
+        data: chartData,
+        analysis: extractedAnalysis,
+        base_bank: baseBank,
+        peer_banks: peerBanks
+      }
     };
   },
 
   async getFDICData() {
-    const response = await callBackend('Get FDIC banking data for major banks');
-    // Backend returns text response, we mark it as coming from AgentCore
+    const job = await this.submitJob('Use the get_fdic_data tool to get current FDIC banking data. Call get_fdic_data() to fetch real-time financial metrics from FDIC API.');
+    const result = await this.pollJobUntilComplete(job.jobId);
+    
+    // Parse the agent response which should contain JSON from the tool
+    let fdicData = [];
+    try {
+      const response = result.result;
+      // Try to extract JSON from the response
+      const jsonMatch = response.match(/\{[^]*?"success"\s*:\s*true[^]*?"data"\s*:\s*\[[^]*?\][^]*?\}/);
+      if (jsonMatch) {
+        const parsed = JSON.parse(jsonMatch[0]);
+        if (parsed.success && parsed.data) {
+          fdicData = parsed.data;
+          console.log('✓ Extracted FDIC data:', fdicData.length, 'records');
+        }
+      }
+    } catch (e) {
+      console.warn('Could not parse FDIC data from agent response:', e.message);
+    }
+    
     return { 
       success: true, 
       result: { 
-        data: [], 
-        data_source: 'AgentCore AI Analysis (FDIC Call Reports 2023-2025)' 
+        data: fdicData, 
+        data_source: 'FDIC Call Reports (Real-time API)' 
       } 
     };
   },
@@ -220,12 +266,29 @@ export const api = {
       }
     }
     
-    const response = await callBackend(prompt);
-    return { response, sources: [] };
+    const job = await this.submitJob(`Use the answer_banking_question tool to answer this question: "${prompt}". Call answer_banking_question with question: "${prompt}" and context: "${bankName || 'General banking question'}".`);
+    const result = await this.pollJobUntilComplete(job.jobId);
+    
+    // Clean response - remove DATA: lines from chat responses
+    let cleanResponse = result.result;
+    if (cleanResponse && cleanResponse.includes('DATA:')) {
+      cleanResponse = cleanResponse.replace(/DATA:\s*\{[\s\S]*?\}\s*\n+/g, '').trim();
+    }
+    
+    return { response: cleanResponse, sources: [] };
   },
 
   async generateFullReport(bankName) {
-    return callBackend(`Generate comprehensive financial report for ${bankName}`);
+    const job = await this.submitJob(`Use the generate_bank_report tool to create a comprehensive financial analysis report for ${bankName}. Call generate_bank_report with bank_name: "${bankName}".`);
+    const result = await this.pollJobUntilComplete(job.jobId);
+    
+    // Clean response - remove DATA: lines from reports
+    let cleanReport = result.result;
+    if (cleanReport && cleanReport.includes('DATA:')) {
+      cleanReport = cleanReport.replace(/DATA:\s*\{[\s\S]*?\}\s*\n+/g, '').trim();
+    }
+    
+    return cleanReport;
   },
 
   // Async job methods
@@ -258,11 +321,14 @@ export const api = {
   async getJobResult(jobId) {
     const response = await fetch(`${BACKEND_URL}/api/jobs/${jobId}/result`);
     
-    if (!response.ok) {
-      throw new Error(`Job result retrieval failed: ${response.status}`);
+    const data = await response.json();
+    
+    // If job failed, throw error with the actual error message
+    if (!response.ok || data.status === 'failed') {
+      throw new Error(data.error || `Job failed with status ${response.status}`);
     }
     
-    return response.json();
+    return data;
   },
 
   // Poll for job completion
@@ -309,16 +375,51 @@ export const api = {
     if (analyzedDocs && analyzedDocs.length > 0) {
       const doc = analyzedDocs[0];
       if (doc.s3_key) {
-        prompt = `Use the analyze_uploaded_pdf tool to answer: "${message}". S3 key: ${doc.s3_key}, Bank: ${doc.bank_name}, Analysis type: question`;
+        // Use the chat_with_documents tool for Q&A (not analyze_uploaded_pdf which is for full reports)
+        prompt = `Use the chat_with_documents tool to answer this question about the uploaded document.
+
+Question: "${message}"
+
+Document details:
+- s3_key: "${doc.s3_key}"
+- bank_name: "${doc.bank_name}"
+- form_type: "${doc.form_type}"
+- year: ${doc.year}
+
+Call chat_with_documents with these parameters to get the answer from the document.`;
       } else {
         prompt = `Answer this question about ${doc.bank_name} ${doc.form_type} ${doc.year}: ${message}`;
       }
     }
-    const response = await callBackend(prompt);
-    return { response, sources: [] };
+    const job = await this.submitJob(prompt);
+    const result = await this.pollJobUntilComplete(job.jobId);
+    return { response: result.result, sources: [] };
   },
 
   async uploadPDFs(files, bankName = '') {
+    // Try agent-powered upload first (uses Claude for intelligent analysis)
+    try {
+      console.log('Attempting agent-powered PDF upload...');
+      const response = await fetch(`${BACKEND_URL}/api/upload-pdf-agent`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ files, bankName })
+      });
+      
+      if (response.ok) {
+        const result = await response.json();
+        console.log('✓ Agent-powered upload successful');
+        return result;
+      }
+      
+      // If agent method fails, fall back to direct upload
+      console.log('Agent upload failed, falling back to direct upload...');
+    } catch (agentError) {
+      console.log('Agent upload error:', agentError.message);
+    }
+    
+    // Fallback: Direct upload (legacy method)
+    console.log('Using direct upload method...');
     const response = await fetch(`${BACKEND_URL}/api/upload-pdf`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -329,7 +430,8 @@ export const api = {
       throw new Error(`Upload failed: ${response.status}`);
     }
     
-    return response.json();
+    const result = await response.json();
+    return { ...result, method: 'direct' };
   },
 
   // Streaming method

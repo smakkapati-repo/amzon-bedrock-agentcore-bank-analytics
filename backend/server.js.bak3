@@ -5,7 +5,6 @@ const https = require('https');
 const { spawn } = require('child_process');
 const path = require('path');
 const { verifyToken } = require('./auth-middleware');
-const NodeCache = require('node-cache');
 
 // ============================================================================
 // DEBUG CONFIGURATION
@@ -40,50 +39,6 @@ AWS.config.update({
   region: process.env.REGION || 'us-east-1',
   logger: DEBUG_MODE ? console : undefined // Enable AWS SDK logging in debug mode
 });
-
-// ============================================================================
-// CACHE CONFIGURATION
-// ============================================================================
-
-// Create cache instances with different TTLs for different data types
-const secCache = new NodeCache({
-  stdTTL: 86400,  // 24 hours (SEC filings don't change often)
-  checkperiod: 3600,  // Check for expired keys every hour
-  useClones: false  // Better performance, data is immutable
-});
-
-const fdicCache = new NodeCache({
-  stdTTL: 3600,  // 1 hour (FDIC data updates daily)
-  checkperiod: 600,  // Check every 10 minutes
-  useClones: false
-});
-
-const bankSearchCache = new NodeCache({
-  stdTTL: 604800,  // 7 days (bank names rarely change)
-  checkperiod: 86400,  // Check daily
-  useClones: false
-});
-
-// Cache metrics for monitoring
-const cacheMetrics = {
-  sec: { hits: 0, misses: 0 },
-  fdic: { hits: 0, misses: 0 },
-  search: { hits: 0, misses: 0 },
-  getHitRate(type) {
-    const metrics = this[type];
-    const total = metrics.hits + metrics.misses;
-    return total > 0 ? (metrics.hits / total * 100).toFixed(2) + '%' : '0%';
-  }
-};
-
-// Log cache stats periodically
-setInterval(() => {
-  logger.info('Cache statistics:', {
-    sec: { ...secCache.getStats(), hitRate: cacheMetrics.getHitRate('sec') },
-    fdic: { ...fdicCache.getStats(), hitRate: cacheMetrics.getHitRate('fdic') },
-    search: { ...bankSearchCache.getStats(), hitRate: cacheMetrics.getHitRate('search') }
-  });
-}, 300000); // Every 5 minutes
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -155,7 +110,7 @@ app.get('/api/diagnostics', (req, res) => {
   }
 
   const agentRuntimeArn = process.env.AGENTCORE_AGENT_ARN;
-
+  
   if (!agentRuntimeArn) {
     throw new Error('AGENTCORE_AGENT_ARN environment variable not set');
   }
@@ -202,7 +157,7 @@ app.post('/api/chat', async (req, res) => {
   try {
     // Use async job pattern for reliability (no 30s timeout)
     const jobId = `job-${Date.now()}-${Math.random().toString(36).substring(2, 10)}`;
-
+    
     // Create job record
     jobs.set(jobId, {
       jobId,
@@ -230,29 +185,29 @@ app.post('/api/chat', async (req, res) => {
     // Poll for completion (max 2 minutes)
     const maxAttempts = 60;
     const intervalMs = 2000;
-
+    
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
       const job = jobs.get(jobId);
-
+      
       if (!job) {
         return res.status(404).json({ error: 'Job not found' });
       }
-
+      
       if (job.status === 'completed') {
         return res.json({ response: job.result, sessionId: job.sessionId });
       }
-
+      
       if (job.status === 'failed') {
         return res.status(500).json({ error: job.error || 'Chat processing failed' });
       }
-
+      
       // Wait before next poll
       await new Promise(resolve => setTimeout(resolve, intervalMs));
     }
-
+    
     // Timeout
     return res.status(408).json({ error: 'Chat request timeout' });
-
+    
   } catch (error) {
     console.error(`[${new Date().toISOString()}] Chat endpoint error:`, error);
     res.status(500).json({ error: error.message });
@@ -278,7 +233,8 @@ async function invokeAgent(req, res) {
 
   try {
     // Get agent ARN from environment
-    const agentRuntimeArn = process.env.AGENTCORE_AGENT_ARN; if (!agentRuntimeArn) throw new Error("AGENTCORE_AGENT_ARN not set");
+    const agentRuntimeArn = process.env.AGENTCORE_AGENT_ARN ||
+      'arn:aws:bedrock-agentcore:us-east-1:164543933824:runtime/PLACEHOLDER_REMOVED';
 
     // Extract region from ARN (format: arn:aws:bedrock-agentcore:REGION:account:runtime/name)
     const region = agentRuntimeArn.split(':')[3] || 'us-east-1';
@@ -381,7 +337,7 @@ async function invokeAgent(req, res) {
 
     // Parse response
     const result = JSON.parse(response.body);
-
+    
     // DEBUG: Log the actual response structure
     logger.debug('AgentCore response structure:', JSON.stringify(result, null, 2));
 
@@ -461,7 +417,8 @@ Provide a comprehensive 6-8 paragraph professional business analysis covering:
 Use professional banking terminology and provide quantitative insights with specific metrics and percentages.`;
 
     // Get agent ARN from environment
-    const agentRuntimeArn = process.env.AGENTCORE_AGENT_ARN; if (!agentRuntimeArn) throw new Error("AGENTCORE_AGENT_ARN not set");
+    const agentRuntimeArn = process.env.AGENTCORE_AGENT_ARN ||
+      'arn:aws:bedrock-agentcore:us-east-1:164543933824:runtime/PLACEHOLDER_REMOVED';
 
     // Extract region from ARN
     const region = agentRuntimeArn.split(':')[3] || 'us-east-1';
@@ -533,7 +490,7 @@ Use professional banking terminology and provide quantitative insights with spec
     }
 
     console.log(`[${new Date().toISOString()}] Analysis complete`);
-
+    
     // Also return the data for chart and table rendering
     const responseData = {
       analysis: output,
@@ -544,7 +501,7 @@ Use professional banking terminology and provide quantitative insights with spec
         Value: parseFloat(row.Value || Math.random() * 3 + 0.5)
       }))
     };
-
+    
     res.json(responseData);
 
   } catch (error) {
@@ -710,7 +667,7 @@ Return the exact JSON output from the tool.`;
 
       // Submit as async job
       const jobId = `job-${Date.now()}-${Math.random().toString(36).substring(2, 10)}`;
-
+      
       jobs.set(jobId, {
         jobId,
         status: JOB_STATUS.PENDING,
@@ -722,9 +679,9 @@ Return the exact JSON output from the tool.`;
 
       // Process job
       await processJob(jobId);
-
+      
       const job = jobs.get(jobId);
-
+      
       if (job.status === JOB_STATUS.COMPLETED) {
         // Parse the agent's response
         try {
@@ -760,7 +717,7 @@ Return the exact JSON output from the tool.`;
     logger.error('Agent upload error:', error.message);
     // Fallback to direct upload method
     logger.info('Falling back to direct upload method...');
-    return res.status(500).json({
+    return res.status(500).json({ 
       error: error.message,
       fallback: 'Use /api/upload-pdf for direct upload'
     });
@@ -776,26 +733,15 @@ app.post('/api/get-sec-filings', async (req, res) => {
   }
 
   try {
+    console.log(`[${new Date().toISOString()}] Fetching SEC filings for ${bankName} (CIK: ${cik})`);
+
+    const axios = require('axios');
     const targetCik = cik || '0000000000';
 
     if (targetCik === '0000000000') {
       return res.json({ success: false, error: 'Invalid CIK', '10-K': [], '10-Q': [] });
     }
 
-    // Check cache first
-    const cacheKey = `sec:${targetCik}`;
-    const cached = secCache.get(cacheKey);
-
-    if (cached) {
-      cacheMetrics.sec.hits++;
-      logger.debug(`SEC cache HIT for ${bankName} (${cacheKey}) - Hit rate: ${cacheMetrics.getHitRate('sec')}`);
-      return res.json(cached);
-    }
-
-    cacheMetrics.sec.misses++;
-    logger.info(`SEC cache MISS for ${bankName} (${cacheKey}) - Fetching from SEC.gov - Hit rate: ${cacheMetrics.getHitRate('sec')}`);
-
-    const axios = require('axios');
     const headers = { 'User-Agent': 'BankIQ Analytics contact@bankiq.com' };
     const url = `https://data.sec.gov/submissions/CIK${targetCik}.json`;
 
@@ -832,25 +778,17 @@ app.post('/api/get-sec-filings', async (req, res) => {
     tenK.sort((a, b) => b.filing_date.localeCompare(a.filing_date));
     tenQ.sort((a, b) => b.filing_date.localeCompare(a.filing_date));
 
-    logger.info(`Found ${tenK.length} 10-K and ${tenQ.length} 10-Q filings for ${bankName} (2023-2025)`);
-    logger.debug(`10-K filings: ${tenK.map(f => f.filing_date).join(', ')}`);
-    logger.debug(`10-Q filings: ${tenQ.map(f => f.filing_date).join(', ')}`);
+    console.log(`[${new Date().toISOString()}] Found ${tenK.length} 10-K and ${tenQ.length} 10-Q filings`);
 
-    const result = {
+    res.json({
       success: true,
       response: `Found ${tenK.length} 10-K and ${tenQ.length} 10-Q filings for ${bankName}`,
-      '10-K': tenK,  // Return all 10-K filings (usually 2-3)
-      '10-Q': tenQ   // Return all 10-Q filings (usually 6-9)
-    };
-
-    // Store in cache
-    secCache.set(cacheKey, result);
-    logger.debug(`Cached SEC data for ${cacheKey} (24 hour TTL)`);
-
-    res.json(result);
+      '10-K': tenK.slice(0, 5),
+      '10-Q': tenQ.slice(0, 10)
+    });
 
   } catch (error) {
-    logger.error('SEC filings error:', error.message);
+    console.error('SEC filings error:', error.message);
     res.json({ success: false, error: error.message, '10-K': [], '10-Q': [] });
   }
 });
@@ -864,18 +802,7 @@ app.post('/api/search-banks', async (req, res) => {
   }
 
   try {
-    // Check cache first
-    const cacheKey = `search:${query.toLowerCase()}`;
-    const cached = bankSearchCache.get(cacheKey);
-
-    if (cached) {
-      cacheMetrics.search.hits++;
-      logger.debug(`Bank search cache HIT for "${query}" - Hit rate: ${cacheMetrics.getHitRate('search')}`);
-      return res.json(cached);
-    }
-
-    cacheMetrics.search.misses++;
-    logger.info(`Bank search cache MISS for "${query}" - Hit rate: ${cacheMetrics.getHitRate('search')}`);
+    console.log(`[${new Date().toISOString()}] Searching for banks: ${query}`);
 
     // Major banks cache
     const majorBanks = [
@@ -940,24 +867,18 @@ app.post('/api/search-banks', async (req, res) => {
           cik: String(company.cik_str).padStart(10, '0')
         }));
 
-        logger.info(`Found ${results.length} companies in SEC EDGAR matching "${query}"`);
+        console.log(`[${new Date().toISOString()}] Found ${results.length} companies in SEC EDGAR matching "${query}"`);
       } catch (edgarError) {
-        logger.error('SEC EDGAR search failed:', edgarError.message);
+        console.error('SEC EDGAR search failed:', edgarError.message);
       }
     } else {
-      logger.info(`Found ${results.length} banks in local cache matching "${query}"`);
+      console.log(`[${new Date().toISOString()}] Found ${results.length} banks in cache matching "${query}"`);
     }
 
-    const finalResult = { success: true, results: results.slice(0, 10) };
-
-    // Cache the result (7 day TTL)
-    bankSearchCache.set(cacheKey, finalResult);
-    logger.debug(`Cached search results for "${query}" (7 day TTL)`);
-
-    res.json(finalResult);
+    res.json({ success: true, results: results.slice(0, 10) });
 
   } catch (error) {
-    logger.error('Search error:', error);
+    console.error('Search error:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -1079,7 +1000,8 @@ async function processJob(jobId) {
     console.log(`[${new Date().toISOString()}] Processing job ${jobId}: ${job.inputText.substring(0, 100)}...`);
 
     // Get agent ARN from environment
-    const agentRuntimeArn = process.env.AGENTCORE_AGENT_ARN; if (!agentRuntimeArn) throw new Error("AGENTCORE_AGENT_ARN not set");
+    const agentRuntimeArn = process.env.AGENTCORE_AGENT_ARN ||
+      'arn:aws:bedrock-agentcore:us-east-1:164543933824:runtime/PLACEHOLDER_REMOVED';
 
     // Extract region from ARN (format: arn:aws:bedrock-agentcore:REGION:account:runtime/name)
     const region = agentRuntimeArn.split(':')[3] || 'us-east-1';
@@ -1200,80 +1122,6 @@ setInterval(() => {
     }
   }
 }, 10 * 60 * 1000);
-
-// ============================================================================
-// CACHE MANAGEMENT ENDPOINTS
-// ============================================================================
-
-// Get cache statistics
-app.get('/api/admin/cache-stats', (req, res) => {
-  res.json({
-    sec: {
-      ...secCache.getStats(),
-      hitRate: cacheMetrics.getHitRate('sec'),
-      hits: cacheMetrics.sec.hits,
-      misses: cacheMetrics.sec.misses
-    },
-    fdic: {
-      ...fdicCache.getStats(),
-      hitRate: cacheMetrics.getHitRate('fdic'),
-      hits: cacheMetrics.fdic.hits,
-      misses: cacheMetrics.fdic.misses
-    },
-    search: {
-      ...bankSearchCache.getStats(),
-      hitRate: cacheMetrics.getHitRate('search'),
-      hits: cacheMetrics.search.hits,
-      misses: cacheMetrics.search.misses
-    }
-  });
-});
-
-// Clear specific cache or all caches
-app.post('/api/admin/clear-cache', (req, res) => {
-  const { type } = req.body;
-
-  try {
-    switch (type) {
-      case 'sec':
-        secCache.flushAll();
-        cacheMetrics.sec = { hits: 0, misses: 0 };
-        logger.info('SEC cache cleared');
-        break;
-      case 'fdic':
-        fdicCache.flushAll();
-        cacheMetrics.fdic = { hits: 0, misses: 0 };
-        logger.info('FDIC cache cleared');
-        break;
-      case 'search':
-        bankSearchCache.flushAll();
-        cacheMetrics.search = { hits: 0, misses: 0 };
-        logger.info('Bank search cache cleared');
-        break;
-      case 'all':
-        secCache.flushAll();
-        fdicCache.flushAll();
-        bankSearchCache.flushAll();
-        cacheMetrics.sec = { hits: 0, misses: 0 };
-        cacheMetrics.fdic = { hits: 0, misses: 0 };
-        cacheMetrics.search = { hits: 0, misses: 0 };
-        logger.info('All caches cleared');
-        break;
-      default:
-        return res.status(400).json({
-          error: 'Invalid cache type. Use: sec, fdic, search, or all'
-        });
-    }
-
-    res.json({
-      success: true,
-      message: `${type} cache cleared successfully`
-    });
-  } catch (error) {
-    logger.error('Cache clear error:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
 
 
 app.listen(PORT, () => {

@@ -2,7 +2,7 @@
 set -e
 
 STACK_NAME=${1:-bankiq}
-REGION=${2:-us-east-1}
+REGION=${AWS_DEFAULT_REGION:-${2:-$(aws configure get region 2>/dev/null || echo "us-east-1")}}
 
 echo "=========================================="
 echo "Deploy Cognito Authentication"

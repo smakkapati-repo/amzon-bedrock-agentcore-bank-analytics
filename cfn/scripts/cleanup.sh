@@ -125,10 +125,25 @@ if [ -n "$AGENT_ECR" ]; then
   echo "✅ Agent ECR repository deleted"
 fi
 
+# Step 2.5: Delete AgentCore agent FIRST (before ECR cleanup)
+echo -e "${YELLOW}🗑️  Deleting AgentCore agent...${NC}"
+if command -v agentcore &> /dev/null; then
+  BACKEND_DIR="$(dirname "$0")/../../backend"
+  if [ -d "$BACKEND_DIR" ]; then
+    cd "$BACKEND_DIR"
+    agentcore destroy --force 2>/dev/null || echo "⚠️  Agent deletion failed or agent doesn't exist"
+    echo "✅ AgentCore agent deletion attempted"
+  else
+    echo "⚠️  Backend directory not found, skipping agent deletion"
+  fi
+else
+  echo "⚠️  agentcore CLI not found, skipping agent deletion"
+fi
+
 # Delete AgentCore ECR repository explicitly
 echo -e "${YELLOW}🗑️  Deleting AgentCore ECR repository...${NC}"
 AGENTCORE_ECR="bedrock-agentcore-bank_iq_agent_v1"
-aws ecr delete-repository --repository-name $AGENTCORE_ECR --region us-west-2 --force 2>/dev/null || echo "⚠️  AgentCore ECR repository may not exist"
+aws ecr delete-repository --repository-name $AGENTCORE_ECR --region $REGION --force 2>/dev/null || echo "⚠️  AgentCore ECR repository may not exist"
 echo "✅ AgentCore ECR repository deletion attempted"
 
 # Fallback: Find and delete any remaining ECR repositories with stack name or variations
@@ -264,24 +279,11 @@ fi
 echo ""
 echo -e "${GREEN}✅ All stacks deleted successfully!${NC}"
 
-# Step 5: Delete AgentCore agent (AFTER stacks are deleted)
+# Step 5: Clean up temporary files
 echo ""
-echo -e "${YELLOW}🗑️  Deleting AgentCore agent...${NC}"
-if command -v agentcore &> /dev/null; then
-  # Try to delete agent from backend directory
-  BACKEND_DIR="$(dirname "$0")/../../backend"
-  if [ -d "$BACKEND_DIR" ]; then
-    echo "Attempting to delete agent from: $BACKEND_DIR"
-    cd "$BACKEND_DIR"
-    agentcore destroy -a bank_iq_agent_v1 --force || echo "⚠️  Agent deletion failed or agent doesn't exist"
-  else
-    echo "⚠️  Backend directory not found, trying from current directory"
-    agentcore destroy -a bank_iq_agent_v1 --force || echo "⚠️  Agent deletion failed or agent doesn't exist"
-  fi
-  echo "✅ AgentCore agent deletion attempted"
-else
-  echo "⚠️  agentcore CLI not found, skipping agent deletion"
-fi
+echo -e "${YELLOW}🧹 Cleaning up temporary files...${NC}"
+rm -f /tmp/agent_arn.txt /tmp/agent_deploy.log
+echo "✅ Temporary files cleaned"
 
 # Step 6: Final S3 cleanup - delete any remaining buckets
 echo ""
